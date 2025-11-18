@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Discussions
+    url: https://github.com/aryansinghshaktawat/vuln-scanner-webapp/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔒 Security Issue
+    url: https://github.com/aryansinghshaktawat/vuln-scanner-webapp/security/advisories/new
+    about: Report a security vulnerability (private)
+  - name: 📖 Documentation
+    url: https://github.com/aryansinghshaktawat/vuln-scanner-webapp/blob/main/README.md
+    about: Read the project documentation

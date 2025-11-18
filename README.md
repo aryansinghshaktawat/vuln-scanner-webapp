@@ -1,21 +1,36 @@
-# Vulnerability Scanner Web Application
+<div align="center">
+
+# 🛡️ Vulnerability Scanner Web Application
+
+### Automated Network Security Scanning with Nmap
 
 A modern, full-stack web application for automated network vulnerability scanning using Nmap. Built with Next.js 14 frontend and FastAPI backend.
 
-![Vulnerability Scanner](https://img.shields.io/badge/Status-Production%20Ready-green)
-![Next.js](https://img.shields.io/badge/Next.js-14-black)
-![Python](https://img.shields.io/badge/Python-3.8+-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-Latest-teal)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![GitHub issues](https://img.shields.io/github/issues/aryansinghshaktawat/vuln-scanner-webapp)](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues)
+[![GitHub stars](https://img.shields.io/github/stars/aryansinghshaktawat/vuln-scanner-webapp)](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/stargazers)
 
-## 🚀 Features
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing) • [License](#-license)
 
-- **Automated Port Scanning**: Discovers open ports and running services
-- **Vulnerability Detection**: Identifies CVE vulnerabilities using Nmap's vulnerability scripts
-- **Modern UI**: Clean, responsive interface built with Tailwind CSS
-- **Real-time Results**: Live scanning with progress indicators
-- **CVE Integration**: Direct links to MITRE CVE database for vulnerability details
-- **Cross-platform**: Works on macOS, Linux, and Windows (with Nmap installed)
-- **Error Handling**: Comprehensive validation and user-friendly error messages
+---
+
+</div>
+
+## ✨ Features
+
+- 🔍 **Automated Port Scanning**: Discovers open ports and running services
+- 🛡️ **Vulnerability Detection**: Identifies CVE vulnerabilities using Nmap's vulnerability scripts
+- 🎨 **Modern UI**: Clean, responsive interface built with Tailwind CSS
+- ⚡ **Real-time Results**: Live scanning with progress indicators
+- 🔗 **CVE Integration**: Direct links to MITRE CVE database for vulnerability details
+- 🌐 **Cross-platform**: Works on macOS, Linux, and Windows (with Nmap installed)
+- ✅ **Error Handling**: Comprehensive validation and user-friendly error messages
+- 🐳 **Docker Ready**: One-command deployment with Docker Compose
 
 ## 🏗️ Architecture
 
@@ -312,18 +327,35 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## 📖 Documentation
 
-- [Deployment Guide](DEPLOYMENT.md) - Comprehensive deployment instructions
-- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
-- [API Documentation](http://127.0.0.1:8000/docs) - Interactive API docs (when running)
+- 📘 [Deployment Guide](DEPLOYMENT.md) - Comprehensive deployment instructions
+- 📗 [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- 📕 [Security Policy](SECURITY.md) - Security guidelines and vulnerability reporting
+- 📙 [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
+- 📓 [Support](SUPPORT.md) - Getting help and FAQ
+- 📔 [Changelog](CHANGELOG.md) - Version history
+- 🔧 [API Documentation](http://127.0.0.1:8000/docs) - Interactive API docs (when running)
+
+## 📸 Screenshots
+
+### Main Interface
+![Main Interface](https://via.placeholder.com/800x450/1a1a1a/3b82f6?text=Scanner+Interface)
+
+### Scan Results
+![Scan Results](https://via.placeholder.com/800x450/1a1a1a/10b981?text=Scan+Results)
+
+### CVE Detection
+![CVE Detection](https://via.placeholder.com/800x450/1a1a1a/ef4444?text=CVE+Detection)
+
+> **Note**: Replace placeholder images with actual screenshots of your application
 
 ## ⚠️ Legal Disclaimer
 
 This tool is for educational and authorized security testing purposes only. Users must:
 
-- Only scan networks and systems they own or have explicit permission to test
-- Comply with all applicable laws and regulations
-- Respect rate limits and target system resources
-- Use responsibly and ethically
+- ✅ Only scan networks and systems they own or have explicit permission to test
+- ✅ Comply with all applicable laws and regulations
+- ✅ Respect rate limits and target system resources
+- ✅ Use responsibly and ethically
 
 The developers are not responsible for any misuse of this software.
 
@@ -331,10 +363,22 @@ The developers are not responsible for any misuse of this software.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author
+## 👨‍💻 Author & Contributors
 
-**Aryan Singh Shaktawat**
-- GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
+**Created by Aryan Singh Shaktawat**
+- 🐙 GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
+- 💼 LinkedIn: [Add your LinkedIn]
+- 🌐 Website: [Add your website]
+
+### Contributors
+
+Thanks to all contributors who have helped make this project better!
+
+<!-- ALL-CONTRIBUTORS-LIST:START -->
+<!-- Add contributors here -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+Want to contribute? Check out our [Contributing Guidelines](CONTRIBUTING.md)!
 
 ## 🙏 Acknowledgments
 
@@ -343,6 +387,31 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Next.js](https://nextjs.org/) - React framework
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
 
+## 💖 Support the Project
+
+If you find this project helpful, please consider:
+
+- ⭐ Starring the repository
+- 🐛 Reporting bugs
+- 💡 Suggesting new features
+- 🔀 Submitting pull requests
+- 📢 Sharing with others
+
+## 📊 Project Stats
+
+![GitHub repo size](https://img.shields.io/github/repo-size/aryansinghshaktawat/vuln-scanner-webapp)
+![GitHub code size](https://img.shields.io/github/languages/code-size/aryansinghshaktawat/vuln-scanner-webapp)
+![GitHub last commit](https://img.shields.io/github/last-commit/aryansinghshaktawat/vuln-scanner-webapp)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/aryansinghshaktawat/vuln-scanner-webapp)
+
 ---
 
-⭐ **Star this repository** if you found it helpful!
+<div align="center">
+
+**⭐ Star this repository if you found it helpful! ⭐**
+
+Made with ❤️ by [Aryan Singh Shaktawat](https://github.com/aryansinghshaktawat)
+
+[Report Bug](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=bug_report.md) • [Request Feature](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=feature_request.md) • [Ask Question](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/discussions)
+
+</div>
