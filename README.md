@@ -74,6 +74,28 @@ Download and install from [nmap.org](https://nmap.org/download.html)
 
 ## 🚀 Quick Start
 
+### Option 1: Docker (Recommended)
+
+**Prerequisites:** Docker and Docker Compose installed
+
+```bash
+# Clone the repository
+git clone https://github.com/aryansinghshaktawat/vuln-scanner-webapp.git
+cd vuln-scanner-webapp
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
+```
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Option 2: Manual Setup
+
 ### 1. Clone the Repository
 ```bash
 git clone https://github.com/aryansinghshaktawat/vuln-scanner-webapp.git
@@ -94,7 +116,10 @@ source .venv/bin/activate
 # .venv\Scripts\activate
 
 # Install dependencies
-pip install fastapi uvicorn
+pip install -r requirements.txt
+
+# Copy environment file
+cp .env.example .env
 
 # Start the backend server
 uvicorn main:app --host 127.0.0.1 --port 8000 --reload
@@ -108,6 +133,9 @@ cd frontend
 npm install
 # or with bun:
 # bun install
+
+# Copy environment file
+cp .env.example .env.local
 
 # Start the frontend development server
 npm run dev
@@ -234,6 +262,9 @@ brew install nmap
 vuln-scanner-webapp/
 ├── backend/
 │   ├── main.py              # FastAPI application
+│   ├── requirements.txt     # Python dependencies
+│   ├── Dockerfile           # Backend Docker image
+│   ├── .env.example         # Environment variables template
 │   ├── .venv/              # Python virtual environment
 │   └── __pycache__/        # Python cache
 ├── frontend/
@@ -243,8 +274,14 @@ vuln-scanner-webapp/
 │   │   └── globals.css     # Global styles
 │   ├── public/             # Static assets
 │   ├── package.json        # Dependencies
+│   ├── Dockerfile          # Frontend Docker image
+│   ├── .env.example        # Environment variables template
 │   ├── tsconfig.json       # TypeScript config
-│   └── tailwind.config.js  # Tailwind CSS config
+│   └── next.config.ts      # Next.js configuration
+├── docker-compose.yml      # Docker Compose configuration
+├── DEPLOYMENT.md           # Deployment guide
+├── CONTRIBUTING.md         # Contributing guidelines
+├── LICENSE                 # MIT License
 ├── README.md
 └── TaskList                # Development task list
 ```
@@ -257,16 +294,27 @@ vuln-scanner-webapp/
 - [ ] **User Authentication**: Multi-user support
 - [ ] **Database Integration**: Persistent data storage
 - [ ] **API Rate Limiting**: Prevent abuse
-- [ ] **Docker Deployment**: Containerized deployment
+- [x] **Docker Deployment**: Containerized deployment ✅
 - [ ] **Scheduling**: Automated periodic scans
+- [ ] **CI/CD Pipeline**: Automated testing and deployment
+- [ ] **WebSocket Support**: Real-time scan progress updates
 
 ## 🤝 Contributing
 
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+**Quick Start:**
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## 📖 Documentation
+
+- [Deployment Guide](DEPLOYMENT.md) - Comprehensive deployment instructions
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- [API Documentation](http://127.0.0.1:8000/docs) - Interactive API docs (when running)
 
 ## ⚠️ Legal Disclaimer
 
