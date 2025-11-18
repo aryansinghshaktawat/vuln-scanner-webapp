@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface Port {
   port: string;
@@ -24,8 +24,28 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [scanTime, setScanTime] = useState(0);
 
-  const handleScan = async () => {
+  // Timer for scan duration
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (loading) {
+      interval = setInterval(() => {
+        setScanTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      setScanTime(0);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleScan = async (quickMode = false) => {
     if (!target.trim()) {
       setError("Please enter a target (domain or IP address)");
       return;
@@ -36,8 +56,9 @@ export default function Home() {
     setResult(null);
 
     try {
+      const endpoint = quickMode ? "scan/quick" : "scan";
       const response = await fetch(
-        `http://127.0.0.1:8000/scan?target=${encodeURIComponent(target.trim())}`
+        `http://127.0.0.1:8000/${endpoint}?target=${encodeURIComponent(target.trim())}`
       );
 
       if (!response.ok) {
@@ -76,7 +97,7 @@ export default function Home() {
 
         {/* Scan Input */}
         <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col gap-4">
             <input
               type="text"
               value={target}
@@ -86,13 +107,22 @@ export default function Home() {
               className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               disabled={loading}
             />
-            <button
-              onClick={handleScan}
-              disabled={loading}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-            >
-              {loading ? "Scanning..." : "Start Scan"}
-            </button>
+            <div className="flex flex-col md:flex-row gap-3">
+              <button
+                onClick={() => handleScan(true)}
+                disabled={loading}
+                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
+              >
+                Quick Scan (Ports Only)
+              </button>
+              <button
+                onClick={() => handleScan()}
+                disabled={loading}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
+              >
+                {loading ? "Scanning..." : "Full Scan (Ports + CVE)"}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -102,8 +132,17 @@ export default function Home() {
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
               <span className="ml-3 text-gray-300">
-                Running security scan... This may take up to 2 minutes
+                Running security scan... {formatTime(scanTime)} elapsed
               </span>
+            </div>
+            <div className="mt-4 text-sm text-gray-400 text-center">
+              <p>• Port scanning and service detection: ~1-2 minutes</p>
+              <p>• Vulnerability scanning with CVE detection: ~3-5 minutes</p>
+              <div className="mt-2 text-xs text-gray-500">
+                {scanTime > 120 && "Vulnerability scanning in progress..."}
+                {scanTime > 60 && scanTime <= 120 && "Service detection in progress..."}
+                {scanTime <= 60 && "Port scanning in progress..."}
+              </div>
             </div>
           </div>
         )}
