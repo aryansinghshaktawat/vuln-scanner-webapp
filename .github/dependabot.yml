@@ -1,73 +1,23 @@
 # Dependabot Configuration
-# Keeps your dependencies up to date automatically
-
 version: 2
 updates:
-  # Enable version updates for npm (frontend)
+  # Frontend dependencies
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "frontend"
-    commit-message:
-      prefix: "chore(deps)"
-    reviewers:
-      - "aryansinghshaktawat"
+    open-pull-requests-limit: 5
 
-  # Enable version updates for pip (backend)
+  # Backend dependencies
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "backend"
-    commit-message:
-      prefix: "chore(deps)"
-    reviewers:
-      - "aryansinghshaktawat"
+    open-pull-requests-limit: 5
 
-  # Enable version updates for GitHub Actions
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "ci"
-    commit-message:
-      prefix: "chore(ci)"
-    reviewers:
-      - "aryansinghshaktawat"
-
-  # Enable version updates for Docker
-  - package-ecosystem: "docker"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "chore(docker)"
-    reviewers:
-      - "aryansinghshaktawat"
-
-  - package-ecosystem: "docker"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "chore(docker)"
-    reviewers:
-      - "aryansinghshaktawat"
+      interval: "monthly"
+    open-pull-requests-limit: 3

@@ -1,88 +1,23 @@
 # Support
 
-## Getting Help
-
-Thank you for using the Vulnerability Scanner Web Application! If you need help, here are your options:
-
 ## 📚 Documentation
 
-Before asking for help, please check our documentation:
+Check our documentation first:
+- [README.md](README.md) - Quick start guide
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment instructions
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contributing guidelines
 
-- **[README.md](README.md)** - Quick start and overview
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment instructions
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contributing guidelines
-- **[SECURITY.md](SECURITY.md)** - Security policy
-- **[FAQ](#frequently-asked-questions)** - Common questions
+## � Issues
 
-## 💬 Community Support
-
-### GitHub Discussions
-For questions, ideas, and general discussions:
-- [Start a Discussion](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/discussions)
-- Search existing discussions first
-- Be clear and provide context
-
-### GitHub Issues
-For bug reports and feature requests:
+Found a bug or have a feature request?
 - [Report a Bug](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=bug_report.md)
 - [Request a Feature](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=feature_request.md)
-- [Documentation Issue](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=documentation.md)
-- [Ask a Question](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=question.md)
 
-## 🐛 Reporting Bugs
+## 💬 Getting Help
 
-When reporting bugs, please include:
-
-1. **Description** - Clear description of the issue
-2. **Steps to reproduce** - Detailed steps
-3. **Expected behavior** - What should happen
-4. **Actual behavior** - What actually happens
-5. **Environment** - OS, browser, versions
-6. **Screenshots** - If applicable
-7. **Logs** - Any error messages
-
-## ✨ Requesting Features
-
-When requesting features, please include:
-
-1. **Problem statement** - What problem does this solve?
-2. **Proposed solution** - Your suggested approach
-3. **Alternatives** - Other solutions considered
-4. **Use case** - How would you use this feature?
-5. **Impact** - Who benefits from this?
-
-## 🔒 Security Issues
-
-**DO NOT** report security vulnerabilities through public GitHub issues!
-
-Please report security issues privately:
-- Email: [INSERT SECURITY EMAIL]
-- See [SECURITY.md](SECURITY.md) for details
-
-## 📧 Direct Contact
-
-For other inquiries:
-- Email: [INSERT CONTACT EMAIL]
-- GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
-
-## ⏱️ Response Time
-
-- **Bug reports**: 2-3 business days
-- **Feature requests**: 5-7 business days  
-- **Security issues**: 24-48 hours
-- **General questions**: 3-5 business days
-
-Please note: This is an open-source project maintained by volunteers. Response times may vary.
-
-## 🤝 How to Help
-
-Want to help others? Here's how:
-
-1. **Answer questions** in Discussions and Issues
-2. **Improve documentation** with pull requests
-3. **Share your experience** in Discussions
-4. **Report bugs** you encounter
-5. **Contribute code** to fix issues
+- Search [existing issues](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues)
+- Check the FAQ below
+- Create a new issue with the question template
 
 ## Frequently Asked Questions
 

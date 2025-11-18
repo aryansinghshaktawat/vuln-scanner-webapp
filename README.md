@@ -337,16 +337,7 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 
 ## 📸 Screenshots
 
-### Main Interface
-![Main Interface](https://via.placeholder.com/800x450/1a1a1a/3b82f6?text=Scanner+Interface)
-
-### Scan Results
-![Scan Results](https://via.placeholder.com/800x450/1a1a1a/10b981?text=Scan+Results)
-
-### CVE Detection
-![CVE Detection](https://via.placeholder.com/800x450/1a1a1a/ef4444?text=CVE+Detection)
-
-> **Note**: Replace placeholder images with actual screenshots of your application
+> Add screenshots of your application here to showcase its features
 
 ## ⚠️ Legal Disclaimer
 
@@ -363,20 +354,10 @@ The developers are not responsible for any misuse of this software.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Author & Contributors
+## 👨‍💻 Author
 
-**Created by Aryan Singh Shaktawat**
-- 🐙 GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
-- 💼 LinkedIn: [Add your LinkedIn]
-- 🌐 Website: [Add your website]
-
-### Contributors
-
-Thanks to all contributors who have helped make this project better!
-
-<!-- ALL-CONTRIBUTORS-LIST:START -->
-<!-- Add contributors here -->
-<!-- ALL-CONTRIBUTORS-LIST:END -->
+**Aryan Singh Shaktawat**
+- GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
 
 Want to contribute? Check out our [Contributing Guidelines](CONTRIBUTING.md)!
 
@@ -387,22 +368,13 @@ Want to contribute? Check out our [Contributing Guidelines](CONTRIBUTING.md)!
 - [Next.js](https://nextjs.org/) - React framework
 - [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
 
-## 💖 Support the Project
+## 💖 Support
 
-If you find this project helpful, please consider:
-
-- ⭐ Starring the repository
-- 🐛 Reporting bugs
-- 💡 Suggesting new features
-- 🔀 Submitting pull requests
-- 📢 Sharing with others
-
-## 📊 Project Stats
-
-![GitHub repo size](https://img.shields.io/github/repo-size/aryansinghshaktawat/vuln-scanner-webapp)
-![GitHub code size](https://img.shields.io/github/languages/code-size/aryansinghshaktawat/vuln-scanner-webapp)
-![GitHub last commit](https://img.shields.io/github/last-commit/aryansinghshaktawat/vuln-scanner-webapp)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/aryansinghshaktawat/vuln-scanner-webapp)
+If you find this project helpful:
+- ⭐ Star the repository
+- 🐛 Report bugs
+- 💡 Suggest features
+- 🔀 Submit pull requests
 
 ---
 
