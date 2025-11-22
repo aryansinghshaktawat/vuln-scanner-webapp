@@ -1,4 +1,4 @@
-#!/Users/aryan/CSFPROJECT/vuln-scanner-webapp/backend/.venv/bin/python3.12
+#!/Users/aryan/VSCODE/vuln-scanner-webapp/backend/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

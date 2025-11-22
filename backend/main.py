@@ -59,24 +59,37 @@ def check_nmap_installed() -> bool:
 # -----------------------------
 
 def run_nmap_basic(target: str) -> str:
-    """Runs a basic Nmap -sV scan."""
+    """Runs a basic Nmap scan with TCP connect."""
     logger.info(f"Running basic scan on target: {target}")
     try:
+        # Use -sT (TCP connect) which doesn't require root privileges
+        # Use -sV for version detection (may require sudo on some systems)
+        # Use -T4 for faster scanning (aggressive timing)
+        # Use -Pn to skip ping and assume host is up
         result = subprocess.run(
-            ["nmap", "-sV", target],
+            ["nmap", "-sT", "-sV", "-T4", "-Pn", target],
             capture_output=True,
             text=True,
-            timeout=180  # Increased to 3 minutes
+            timeout=300  # 5 minutes for basic scan
         )
         if result.returncode != 0:
             logger.error(f"Nmap scan failed with return code {result.returncode}: {result.stderr}")
-            raise HTTPException(status_code=500, detail=f"Nmap scan failed: {result.stderr}")
+            # If scan failed, try without -sV (version detection)
+            logger.info("Retrying scan without version detection...")
+            result = subprocess.run(
+                ["nmap", "-sT", "-T4", "-Pn", target],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            if result.returncode != 0:
+                raise HTTPException(status_code=500, detail=f"Nmap scan failed: {result.stderr}")
         
         logger.info("Basic scan completed successfully")
         return result.stdout
     except subprocess.TimeoutExpired:
         logger.error("Nmap scan timed out")
-        raise HTTPException(status_code=408, detail="Scan timed out after 180 seconds")
+        raise HTTPException(status_code=408, detail="Scan timed out after 5 minutes. Target may be unresponsive.")
     except FileNotFoundError:
         logger.error("Nmap not found on system")
         raise HTTPException(status_code=500, detail="Nmap not installed on system")
@@ -112,20 +125,35 @@ def run_nmap_vuln(target: str) -> str:
     """Runs Nmap vuln scripts."""
     logger.info(f"Running vulnerability scan on target: {target}")
     try:
+        # Use more efficient scan options:
+        # -sT: TCP connect scan (doesn't require root)
+        # -sV: Service version detection
+        # -T4: Faster timing template
+        # -Pn: Skip ping, assume host is up
+        # --script=vuln: Only vulnerability scripts
+        # --script-timeout=120s: Timeout individual scripts at 2 minutes
         result = subprocess.run(
-            ["nmap", "-sV", "--script", "vuln", target],
+            ["nmap", "-sT", "-sV", "-T4", "-Pn", "--script", "vuln", "--script-timeout", "120s", target],
             capture_output=True,
             text=True,
-            timeout=300  # Increased to 5 minutes for vuln scans
+            timeout=600  # Increased to 10 minutes for vuln scans
         )
         if result.returncode != 0:
             logger.warning(f"Nmap vuln scan completed with warnings: {result.stderr}")
+            # Try without -sV if it failed
+            logger.info("Retrying vulnerability scan without version detection...")
+            result = subprocess.run(
+                ["nmap", "-sT", "-T4", "-Pn", "--script", "vuln", "--script-timeout", "120s", target],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
         
         logger.info("Vulnerability scan completed")
         return result.stdout
     except subprocess.TimeoutExpired:
         logger.error("Nmap vulnerability scan timed out")
-        raise HTTPException(status_code=408, detail="Vulnerability scan timed out after 300 seconds")
+        raise HTTPException(status_code=408, detail="Vulnerability scan timed out after 10 minutes. Try using Quick Scan mode for faster results.")
     except FileNotFoundError:
         logger.error("Nmap not found on system")
         raise HTTPException(status_code=500, detail="Nmap not installed on system")
