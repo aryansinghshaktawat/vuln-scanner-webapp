@@ -3,10 +3,9 @@ import re
 import logging
 import ipaddress
 import socket
-from typing import List, Dict, Set, Optional
-from fastapi import FastAPI, HTTPException, Query
+from typing import List, Dict
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -27,6 +26,7 @@ app.add_middleware(
 # VALIDATION FUNCTIONS
 # -----------------------------
 
+
 def validate_target(target: str) -> bool:
     """Validates if target is a valid IP address or domain name."""
     try:
@@ -41,22 +41,22 @@ def validate_target(target: str) -> bool:
         except socket.gaierror:
             return False
 
+
 def check_nmap_installed() -> bool:
     """Checks if nmap is installed on the system."""
     try:
         result = subprocess.run(
-            ["nmap", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["nmap", "--version"], capture_output=True, text=True, timeout=5
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False
 
+
 # -----------------------------
 # NMAP SCANNING FUNCTIONS
 # -----------------------------
+
 
 def run_nmap_basic(target: str) -> str:
     """Runs a basic Nmap scan with TCP connect."""
@@ -70,29 +70,37 @@ def run_nmap_basic(target: str) -> str:
             ["nmap", "-sT", "-sV", "-T4", "-Pn", target],
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes for basic scan
+            timeout=300,  # 5 minutes for basic scan
         )
         if result.returncode != 0:
-            logger.error(f"Nmap scan failed with return code {result.returncode}: {result.stderr}")
+            logger.error(
+                f"Nmap scan failed with return code {result.returncode}: {result.stderr}"
+            )
             # If scan failed, try without -sV (version detection)
             logger.info("Retrying scan without version detection...")
             result = subprocess.run(
                 ["nmap", "-sT", "-T4", "-Pn", target],
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=300,
             )
             if result.returncode != 0:
-                raise HTTPException(status_code=500, detail=f"Nmap scan failed: {result.stderr}")
-        
+                raise HTTPException(
+                    status_code=500, detail=f"Nmap scan failed: {result.stderr}"
+                )
+
         logger.info("Basic scan completed successfully")
         return result.stdout
     except subprocess.TimeoutExpired:
         logger.error("Nmap scan timed out")
-        raise HTTPException(status_code=408, detail="Scan timed out after 5 minutes. Target may be unresponsive.")
+        raise HTTPException(
+            status_code=408,
+            detail="Scan timed out after 5 minutes. Target may be unresponsive.",
+        )
     except FileNotFoundError:
         logger.error("Nmap not found on system")
         raise HTTPException(status_code=500, detail="Nmap not installed on system")
+
 
 def parse_ports(nmap_output: str) -> List[Dict]:
     """Extracts open ports + service info."""
@@ -112,14 +120,17 @@ def parse_ports(nmap_output: str) -> List[Dict]:
         if in_section:
             parts = line.split()
             if len(parts) >= 3:
-                ports.append({
-                    "port": parts[0],
-                    "state": parts[1],
-                    "service": parts[2],
-                    "version": " ".join(parts[3:]) if len(parts) > 3 else ""
-                })
-                
+                ports.append(
+                    {
+                        "port": parts[0],
+                        "state": parts[1],
+                        "service": parts[2],
+                        "version": " ".join(parts[3:]) if len(parts) > 3 else "",
+                    }
+                )
+
     return ports
+
 
 def run_nmap_vuln(target: str) -> str:
     """Runs Nmap vuln scripts."""
@@ -133,30 +144,58 @@ def run_nmap_vuln(target: str) -> str:
         # --script=vuln: Only vulnerability scripts
         # --script-timeout=120s: Timeout individual scripts at 2 minutes
         result = subprocess.run(
-            ["nmap", "-sT", "-sV", "-T4", "-Pn", "--script", "vuln", "--script-timeout", "120s", target],
+            [
+                "nmap",
+                "-sT",
+                "-sV",
+                "-T4",
+                "-Pn",
+                "--script",
+                "vuln",
+                "--script-timeout",
+                "120s",
+                target,
+            ],
             capture_output=True,
             text=True,
-            timeout=600  # Increased to 10 minutes for vuln scans
+            timeout=600,  # Increased to 10 minutes for vuln scans
         )
         if result.returncode != 0:
             logger.warning(f"Nmap vuln scan completed with warnings: {result.stderr}")
             # Try without -sV if it failed
             logger.info("Retrying vulnerability scan without version detection...")
             result = subprocess.run(
-                ["nmap", "-sT", "-T4", "-Pn", "--script", "vuln", "--script-timeout", "120s", target],
+                [
+                    "nmap",
+                    "-sT",
+                    "-T4",
+                    "-Pn",
+                    "--script",
+                    "vuln",
+                    "--script-timeout",
+                    "120s",
+                    target,
+                ],
                 capture_output=True,
                 text=True,
-                timeout=600
+                timeout=600,
             )
-        
+
         logger.info("Vulnerability scan completed")
         return result.stdout
     except subprocess.TimeoutExpired:
         logger.error("Nmap vulnerability scan timed out")
-        raise HTTPException(status_code=408, detail="Vulnerability scan timed out after 10 minutes. Try using Quick Scan mode for faster results.")
+        raise HTTPException(
+            status_code=408,
+            detail=(
+                "Vulnerability scan timed out after 10 minutes. "
+                "Try using Quick Scan mode for faster results."
+            ),
+        )
     except FileNotFoundError:
         logger.error("Nmap not found on system")
         raise HTTPException(status_code=500, detail="Nmap not installed on system")
+
 
 def extract_cves(nmap_output: str) -> List[str]:
     """Extracts CVE numbers using regex."""
@@ -168,28 +207,35 @@ def extract_cves(nmap_output: str) -> List[str]:
 # FASTAPI ROUTES
 # -----------------------------
 
+
 @app.get("/")
 def root():
     return {"message": "Backend is working!"}
 
+
 @app.get("/scan/quick")
 def quick_scan_target(target: str):
     """Quick scan endpoint - ports only, no vulnerabilities."""
-    
+
     # Validate input
     if not target or target.strip() == "":
         raise HTTPException(status_code=400, detail="Target parameter is required")
-    
+
     target = target.strip()
-    
+
     # Validate target format
     if not validate_target(target):
-        raise HTTPException(status_code=400, detail="Invalid target. Must be a valid IP address or domain name")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid target. Must be a valid IP address or domain name",
+        )
+
     # Check if nmap is installed
     if not check_nmap_installed():
-        raise HTTPException(status_code=500, detail="Nmap is not installed on the system")
-    
+        raise HTTPException(
+            status_code=500, detail="Nmap is not installed on the system"
+        )
+
     try:
         basic_output = run_nmap_basic(target)
         ports = parse_ports(basic_output)
@@ -204,26 +250,34 @@ def quick_scan_target(target: str):
         raise
     except Exception as e:
         logger.error(f"Unexpected error during quick scan: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during the quick scan")
+        raise HTTPException(
+            status_code=500, detail="An unexpected error occurred during the quick scan"
+        )
+
 
 @app.get("/scan")
 def scan_target(target: str):
     """Main API endpoint."""
-    
+
     # Validate input
     if not target or target.strip() == "":
         raise HTTPException(status_code=400, detail="Target parameter is required")
-    
+
     target = target.strip()
-    
+
     # Validate target format
     if not validate_target(target):
-        raise HTTPException(status_code=400, detail="Invalid target. Must be a valid IP address or domain name")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid target. Must be a valid IP address or domain name",
+        )
+
     # Check if nmap is installed
     if not check_nmap_installed():
-        raise HTTPException(status_code=500, detail="Nmap is not installed on the system")
-    
+        raise HTTPException(
+            status_code=500, detail="Nmap is not installed on the system"
+        )
+
     try:
         basic_output = run_nmap_basic(target)
         ports = parse_ports(basic_output)
@@ -241,8 +295,12 @@ def scan_target(target: str):
         raise
     except Exception as e:
         logger.error(f"Unexpected error during scan: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during the scan")
+        raise HTTPException(
+            status_code=500, detail="An unexpected error occurred during the scan"
+        )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="127.0.0.1", port=8000)
