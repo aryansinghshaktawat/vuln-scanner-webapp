@@ -55,11 +55,52 @@ export default function Home() {
     setError(null);
     setResult(null);
 
-    try {
+  // Prepare variables that may be referenced in catch block
+  let url = "";
+  const timeoutMs = 90_000; // 90 seconds
+
+  try {
       const endpoint = quickMode ? "scan/quick" : "scan";
-      const response = await fetch(
-        `http://127.0.0.1:8000/${endpoint}?target=${encodeURIComponent(target.trim())}`
-      );
+      // Resolve API base URL from NEXT_PUBLIC_API_URL (set in env/docker) or
+      // fallback to the current page hostname with port 8000. Match the current
+      // page protocol to avoid mixed-content blocking (https page calling http).
+      const getApiBase = () => {
+        const envBase = (process.env as any).NEXT_PUBLIC_API_URL;
+        // If env specifies a full URL, use it (strip trailing slashes)
+        if (envBase) {
+          try {
+            const parsed = new URL(envBase);
+            return parsed.href.replace(/\/+$/g, "");
+          } catch {
+            // envBase might be a host like 'backend:8000' — prefix with current protocol
+            if (typeof window !== "undefined") {
+              return `${window.location.protocol}//${envBase}`.replace(/\/+$/g, "");
+            }
+            return `http://${envBase}`.replace(/\/+$/g, "");
+          }
+        }
+
+        if (typeof window !== "undefined") {
+          // Use current protocol and hostname so requests from the browser target the right host
+          return `${window.location.protocol}//${window.location.hostname}:8000`;
+        }
+
+        return "http://127.0.0.1:8000";
+      };
+
+      const apiBase = getApiBase();
+      url = `${apiBase}/${endpoint}?target=${encodeURIComponent(target.trim())}`;
+
+      // Use AbortController to avoid hanging requests and present a clearer error
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(url, { mode: "cors", signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Scan failed" }));
@@ -69,8 +110,18 @@ export default function Home() {
       const data: ScanResult = await response.json();
       setResult(data);
     } catch (err) {
-      console.error("Scan error:", err);
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      console.error("Scan error:", err, "url:", url);
+      if (err instanceof Error) {
+        if (err.name === "AbortError") {
+          setError(
+            `Request timed out after ${Math.round(timeoutMs / 1000)}s when calling ${url}`
+          );
+        } else {
+          setError(`${err.message} (request: ${url})`);
+        }
+      } else {
+        setError(`An unexpected error occurred when calling ${url}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -136,13 +187,20 @@ export default function Home() {
               </span>
             </div>
             <div className="mt-4 text-sm text-gray-400 text-center">
-              <p>• Port scanning and service detection: ~1-2 minutes</p>
-              <p>• Vulnerability scanning with CVE detection: ~3-5 minutes</p>
+              <p>• Quick scan (ports only): ~2-3 minutes</p>
+              <p>• Full scan with CVE detection: ~5-10 minutes</p>
               <div className="mt-2 text-xs text-gray-500">
-                {scanTime > 120 && "Vulnerability scanning in progress..."}
+                {scanTime > 300 && "Deep vulnerability scanning in progress... This can take up to 10 minutes."}
+                {scanTime > 180 && scanTime <= 300 && "Vulnerability scanning in progress..."}
+                {scanTime > 120 && scanTime <= 180 && "Running CVE detection scripts..."}
                 {scanTime > 60 && scanTime <= 120 && "Service detection in progress..."}
                 {scanTime <= 60 && "Port scanning in progress..."}
               </div>
+              {scanTime > 360 && (
+                <div className="mt-3 p-3 bg-yellow-900 border border-yellow-700 rounded text-yellow-300 text-sm">
+                  ⚠️ Scan is taking longer than expected. The target may be slow to respond or have many services to check.
+                </div>
+              )}
             </div>
           </div>
         )}
