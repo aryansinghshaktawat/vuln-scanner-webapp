@@ -2,19 +2,21 @@
 
 # 🛡️ Northstar Vulnerability Management Platform
 
-### Network Security & Perimeter Vulnerability Management Platform
+### Defensive Network Security, Asset Perimeter & Vulnerability Lifecycle Platform
 
-A portfolio-grade defensive cybersecurity platform transforming standard Nmap network audits into continuous asset inventory, explainable risk scoring, scan history diffs, vulnerability lifecycle tracking, scheduled scans, and multi-format reporting.
+An end-to-end, portfolio-ready defensive cybersecurity platform transforming standard Nmap network audits into continuous asset inventory, explainable risk scoring, scan history diffs, vulnerability lifecycle tracking, scheduled scans, and multi-format reporting.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16_App_Router-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg)](https://www.typescriptlang.org/)
 [![Nmap](https://img.shields.io/badge/Scanner-Nmap_7.9+-00599C.svg)](https://nmap.org/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](docker-compose.yml)
 [![CI/CD](https://img.shields.io/badge/CI-GitHub_Actions-2088FF.svg)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-22%2F22_Passing-brightgreen.svg)](backend/tests/)
 
-[Platform Overview](#-platform-overview) • [Architecture](#-architecture) • [Security Controls](#-security-controls--authorized-use-policy) • [Quick Start](#-quick-start) • [Risk Scoring Model](#-explainable-risk-scoring-model) • [Vulnerability Diff](#-vulnerability-diff-engine) • [API Reference](#-api-reference)
+[Platform Overview](#-platform-overview) • [Console Walkthrough](#-console-walkthrough) • [Architecture](#-architecture) • [Security Controls](#-security-controls--authorized-use-policy) • [Quick Start](#-quick-start) • [Risk Scoring Model](#-explainable-risk-scoring-model) • [Vulnerability Diff](#-vulnerability-diff-engine) • [API Reference](#-api-reference)
 
 ---
 
@@ -32,10 +34,10 @@ A portfolio-grade defensive cybersecurity platform transforming standard Nmap ne
 
 ## 🧭 Platform Overview
 
-**Northstar Vulnerability Management Platform** is designed to provide defensive security engineers and SecOps teams with continuous visibility into their external and internal attack surfaces. Rather than treating port scanning as a one-off CLI action, Northstar wraps the trusted **Nmap** engine with an operational security management plane:
+**Northstar Vulnerability Management Platform** is engineered to provide defensive security engineers and SecOps teams with continuous visibility into their external and internal attack surfaces. Rather than treating port scanning as a one-off CLI action, Northstar wraps the trusted **Nmap** engine with an enterprise-grade operational management plane:
 
 1. **Asset Inventory**: Register and categorize servers, web endpoints, database instances, and network appliances with owner metadata, environment tiers, and business criticality ratings.
-2. **Scan Orchestration & Isolated Workers**: Asynchronous execution via dedicated worker queues and concurrency semaphores, preventing HTTP request blocking and command-line injection.
+2. **Scan Orchestration & Isolated Workers**: Asynchronous execution via dedicated background worker queues and concurrency semaphores, preventing HTTP request blocking and command-line injection.
 3. **Real-Time Scan Telemetry**: Server-Sent Events (SSE) broadcast live scan stages (`Host Discovery`, `Port Scanning`, `Service Probing`, `NSE Vulnerability Scripts`) without artificial progress simulation.
 4. **Persistent Historical Records**: Full scan audit trails stored in SQLAlchemy models (SQLite local fallback, PostgreSQL for production deployments).
 5. **Vulnerability Diff Engine**: Instant comparison between the current scan and the prior scan for the same asset, pinpointing `NEW`, `RESOLVED`, and `PERSISTING` vulnerabilities, as well as port state and service version changes.
@@ -46,11 +48,49 @@ A portfolio-grade defensive cybersecurity platform transforming standard Nmap ne
 
 ---
 
+## 🖥️ Console Walkthrough
+
+The platform features a Next.js 16 Security Operations Console designed for incident triage and vulnerability lifecycle tracking:
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│  🛡️ NORTHSTAR VULNERABILITY PLATFORM            Active Perimeter | SecOps Analyst (Tier 1)│
+├──────────────┬─────────────────────────────────────────────────────────────────────────┤
+│ [Dashboard]  │  PERIMETER OVERVIEW                                                     │
+│ [Assets]     │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
+│ [Scans]      │  │ Assets: 8    │  │ Scanned: 6   │  │ Open Vulns:14│  │ Critical: 2  │ │
+│ [Vulns]      │  └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘ │
+│ [Schedules]  │                                                                         │
+│ [Reports]    │  POSTURE METRICS                  EXPLAINABLE RISK GAUGE                │
+│ [Settings]   │  • High Risk: 5                   Score: 78 / 100 [HIGH RISK]           │
+│              │  • Medium Risk: 7                 - Critical asset (Tier 1 core)        │
+│              │  • New Vulns (24h): 3             - Internet-facing production host     │
+│              │  • Resolved: 4                    - High-severity finding (CVE-2023)    │
+│              │                                                                         │
+│              │  RECENT SCANS & DIFFS                                                   │
+│              │  • 192.168.1.100 [Production API]  COMPLETED  14.2s  Diff: 1 New, 1 Res │
+│              │  • dev-bastion.internal            COMPLETED   4.8s  Diff: 0 New, 0 Res │
+└──────────────┴─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **`/dashboard`** — Perimeter health metrics, severity distributions, risk gauge, and quick-launcher.
+- **`/assets`** — Asset inventory table with filtering by environment (Production, Staging, Dev, Internal) and criticality (Critical, High, Medium, Low).
+- **`/assets/[id]`** — Detailed asset security posture, detected open ports, active findings, scan history, and drift diff.
+- **`/scans`** — Live scan management dashboard with real-time status indicators and abort/cancel actions.
+- **`/scans/[id]`** — Real-time SSE progress monitor, open ports list, CVE findings, and side-by-side diff viewer.
+- **`/vulnerabilities`** — Centralized remediation center with status filters, owner assignment, due dates, notes, and *"Verify Fix"* automation.
+- **`/vulnerabilities/[id]`** — Individual finding dossier with CVSS scores, raw NSE evidence, and remediation tracking.
+- **`/schedules`** — Automated recurring scanning configuration with APScheduler.
+- **`/reports`** — Multi-format reporting export center (JSON technical export, CSV spreadsheet, and printable HTML executive summary).
+- **`/settings`** — Target safety policy, legal notices, scanner engine health diagnostics, and environment configuration.
+
+---
+
 ## 🏗️ Architecture
 
 ```
                        ┌────────────────────────────────────────────────────────┐
-                       │                   Next.js 16 Console                   │
+                       │               Next.js 16 Security Console              │
                        │   Dashboard • Inventory • Findings • Reports • Audit   │
                        └──────────────────────────┬─────────────────────────────┘
                                                   │ REST / SSE
@@ -62,7 +102,7 @@ A portfolio-grade defensive cybersecurity platform transforming standard Nmap ne
                                      │                            │
              ┌───────────────────────▼─────────┐        ┌─────────▼─────────────┐
              │       Job Worker & Queue        │        │   Database / Models   │
-             │   APScheduler Recurring Jobs    │        │  SQLAlchemy (SQLite /  │
+             │   APScheduler Recurring Jobs    │        │  SQLAlchemy (SQLite / │
              │   Concurrency Limiter (max 3)   │        │      PostgreSQL)      │
              └───────────────┬─────────────────┘        └───────────────────────┘
                              │ Subprocess Array (shell=False)
@@ -87,6 +127,57 @@ A portfolio-grade defensive cybersecurity platform transforming standard Nmap ne
 
 ---
 
+## 📁 Repository Structure
+
+```
+vuln-scanner-webapp/
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # GitHub Actions CI (Nmap, Pytest, Linters, Next.js Build)
+├── backend/
+│   ├── app/
+│   │   ├── api/                 # REST & SSE routers
+│   │   │   ├── assets.py        # Asset CRUD & posture endpoints
+│   │   │   ├── audit.py         # Audit event queries
+│   │   │   ├── auth.py          # JWT authentication & RBAC
+│   │   │   ├── dashboard.py     # Aggregated security metrics
+│   │   │   ├── findings.py      # Vulnerability tracking & "Verify Fix"
+│   │   │   ├── notifications.py # Alerting and notifications
+│   │   │   ├── reports.py       # JSON, CSV, and HTML report endpoints
+│   │   │   ├── scans.py         # Scan dispatcher, cancellation, and SSE streams
+│   │   │   └── schedules.py     # Recurring scan schedule CRUD
+│   │   ├── core/                # Password hashing, JWT tokens, RBAC dependencies
+│   │   ├── models/              # SQLAlchemy ORM models (Asset, Scan, Finding, User, etc.)
+│   │   ├── scanner/             # Safe Nmap engine, profiles, parser, diff, validator, worker
+│   │   ├── schemas/             # Pydantic v2 schemas for all entities
+│   │   ├── services/            # CISA KEV intelligence, notifications, reports, APScheduler
+│   │   ├── config.py            # Pydantic Settings & environment variables
+│   │   └── database.py          # Database session & default seeding
+│   ├── tests/                   # 22 Unit & integration tests (pytest)
+│   ├── Dockerfile               # Production-ready Python + Nmap image
+│   ├── requirements.txt         # Backend Python dependencies
+│   └── main.py                  # FastAPI application entrypoint & legacy endpoints
+├── frontend/
+│   ├── app/
+│   │   ├── assets/              # Asset inventory & asset detail pages
+│   │   ├── components/          # Sidebar, Topbar, Badges, DiffViewer, RiskGauge, Modals
+│   │   ├── lib/                 # Typed API client & data interfaces
+│   │   ├── reports/             # Multi-format report export center
+│   │   ├── scans/               # Scan history table & live SSE scan page
+│   │   ├── schedules/           # Recurring schedule management page
+│   │   ├── settings/            # Target safety policy & governance page
+│   │   ├── vulnerabilities/     # Remediation tracker & finding detail page
+│   │   ├── globals.css          # Design system tokens and styles
+│   │   └── page.tsx             # Overview security dashboard
+│   ├── Dockerfile               # Node 20 alpine multi-stage build
+│   └── package.json             # Next.js 16 dependencies
+├── docker-compose.yml           # Multi-container orchestration with persistent storage
+├── CHANGELOG.md                 # Semantic versioning release history
+└── README.md                    # Platform documentation
+```
+
+---
+
 ## 🔒 Security Controls & Scanner Safeguards
 
 | Threat Vector | Mitigation Strategy | Implementation |
@@ -102,6 +193,13 @@ A portfolio-grade defensive cybersecurity platform transforming standard Nmap ne
 ---
 
 ## 🚀 Quick Start
+
+### Default Development Credentials
+- **Username**: `admin`
+- **Password**: `Admin123!`
+- **Role**: `admin` (full permissions)
+
+---
 
 ### Option A: Local Development Setup
 
@@ -324,6 +422,31 @@ npm run build
 | `CORS_ORIGINS` | `http://localhost:3000` | Permitted origins for Cross-Origin Resource Sharing |
 | `NMAP_BINARY` | `nmap` | Path or name of the Nmap executable |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Public backend endpoint URL consumed by browser client |
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+<details>
+<summary><strong>Why does Northstar default to TCP Connect (-sT) rather than SYN Stealth (-sS)?</strong></summary>
+<p>
+SYN stealth scans (-sS) require raw socket capabilities provided only by root/administrator privileges. Using TCP Connect (-sT) allows the platform and workers to execute safely in unprivileged environments, standard containers, and multi-tenant cloud hosts without running containers as root.
+</p>
+</details>
+
+<details>
+<summary><strong>How are long-running scans prevented from blocking the API?</strong></summary>
+<p>
+FastAPI accepts the scan request, writes a <code>QUEUED</code> record to the database, and delegates execution to a non-blocking asynchronous <code>ScanWorker</code>. The worker streams real-time state changes via Server-Sent Events (SSE) while the API responds immediately with the newly registered scan record.
+</p>
+</details>
+
+<details>
+<summary><strong>Can I integrate PostgreSQL instead of SQLite?</strong></summary>
+<p>
+Yes. Set the <code>DATABASE_URL</code> environment variable to your PostgreSQL connection string (e.g. <code>postgresql://user:password@localhost:5432/northstar</code>). SQLAlchemy automatically handles engine creation and connection pooling.
+</p>
+</details>
 
 ---
 
