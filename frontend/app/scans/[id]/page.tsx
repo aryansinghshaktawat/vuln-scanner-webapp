@@ -15,6 +15,7 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
   const [scan, setScan] = useState<ScanRecord | null>(null);
   const [diff, setDiff] = useState<DiffResult | null>(null);
   const [activeTab, setActiveTab] = useState<"findings" | "ports" | "diff" | "raw">("findings");
+  const [tabSelectedByUser, setTabSelectedByUser] = useState(false);
   const [loading, setLoading] = useState(true);
   const [livePhase, setLivePhase] = useState<string>("");
 
@@ -23,6 +24,10 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
       const data = await apiFetch<ScanRecord>(`/api/scans/${id}`);
       setScan(data);
       setLivePhase(data.progress_phase);
+
+      if (!tabSelectedByUser && data.status === "COMPLETED" && data.findings.length === 0 && data.open_ports.length > 0) {
+        setActiveTab("ports");
+      }
 
       if (data.status === "COMPLETED") {
         apiFetch<DiffResult>(`/api/scans/${id}/diff`)
@@ -34,34 +39,45 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, tabSelectedByUser]);
 
   useEffect(() => {
     fetchScan();
 
     // Connect to Server-Sent Events (SSE) live progress stream
     const apiBase = getApiBase();
-    const eventSource = new EventSource(`${apiBase}/api/scans/${id}/stream`);
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource(`${apiBase}/api/scans/${id}/stream`);
 
-    eventSource.onmessage = (event) => {
-      try {
-        const update = JSON.parse(event.data);
-        if (update.progress_phase) setLivePhase(update.progress_phase);
-        if (update.status && ["COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"].includes(update.status)) {
-          fetchScan();
-          eventSource.close();
+      eventSource.onmessage = (event) => {
+        try {
+          const update = JSON.parse(event.data);
+          if (update.progress_phase) setLivePhase(update.progress_phase);
+          if (update.status && ["COMPLETED", "FAILED", "TIMEOUT", "CANCELLED"].includes(update.status)) {
+            fetchScan();
+            eventSource?.close();
+          }
+        } catch {
+          // Keepalive or parse error
         }
-      } catch {
-        // Keepalive or parse error
-      }
-    };
+      };
 
-    eventSource.onerror = () => {
-      eventSource.close();
-    };
+      eventSource.onerror = () => {
+        eventSource?.close();
+      };
+    } catch {
+      // Ignore SSE init failure
+    }
+
+    // Polling interval ensures UI updates reliably even if SSE drops or disconnects
+    const pollInterval = setInterval(() => {
+      fetchScan();
+    }, 2500);
 
     return () => {
-      eventSource.close();
+      eventSource?.close();
+      clearInterval(pollInterval);
     };
   }, [id, fetchScan]);
 
@@ -225,25 +241,37 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
         <div className="tab-nav">
           <button
             className={`tab-btn ${activeTab === "findings" ? "active" : ""}`}
-            onClick={() => setActiveTab("findings")}
+            onClick={() => {
+              setActiveTab("findings");
+              setTabSelectedByUser(true);
+            }}
           >
             Vulnerability Findings ({scan.findings.length})
           </button>
           <button
             className={`tab-btn ${activeTab === "ports" ? "active" : ""}`}
-            onClick={() => setActiveTab("ports")}
+            onClick={() => {
+              setActiveTab("ports");
+              setTabSelectedByUser(true);
+            }}
           >
             Open Ports ({scan.open_ports.length})
           </button>
           <button
             className={`tab-btn ${activeTab === "diff" ? "active" : ""}`}
-            onClick={() => setActiveTab("diff")}
+            onClick={() => {
+              setActiveTab("diff");
+              setTabSelectedByUser(true);
+            }}
           >
             Differential Comparison
           </button>
           <button
             className={`tab-btn ${activeTab === "raw" ? "active" : ""}`}
-            onClick={() => setActiveTab("raw")}
+            onClick={() => {
+              setActiveTab("raw");
+              setTabSelectedByUser(true);
+            }}
           >
             Raw Nmap Output
           </button>
@@ -269,8 +297,30 @@ export default function ScanDetailPage({ params }: { params: Promise<{ id: strin
                 <tbody>
                   {scan.findings.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
-                        ✓ No potential vulnerabilities identified in this scan execution.
+                      <td colSpan={8} style={{ textAlign: "center", padding: "36px 20px", color: "#64748b" }}>
+                        <div style={{ marginBottom: "12px", fontSize: "14px", fontWeight: 500 }}>
+                          ✓ No potential vulnerabilities identified in this scan profile.
+                        </div>
+                        {scan.open_ports.length > 0 ? (
+                          <div>
+                            <p style={{ margin: "0 0 12px 0", fontSize: "12px", color: "#94a3b8" }}>
+                              Discovered {scan.open_ports.length} open port{scan.open_ports.length === 1 ? "" : "s"} on target {scan.target}.
+                            </p>
+                            <button
+                              className="btn btn-outline"
+                              onClick={() => {
+                                setActiveTab("ports");
+                                setTabSelectedByUser(true);
+                              }}
+                            >
+                              Inspect {scan.open_ports.length} Open Port{scan.open_ports.length === 1 ? "" : "s"} & Services →
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                            No open ports responded to probes. Target host may be down or dropping unsolicited packets.
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ) : (

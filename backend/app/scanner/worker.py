@@ -19,6 +19,15 @@ from app.services.notifications import notification_service
 logger = logging.getLogger("northstar.worker")
 
 
+def safe_duration(started: Optional[datetime], completed: Optional[datetime]) -> float:
+    """Calculate scan duration in seconds safely handling naive and aware datetimes."""
+    if not started or not completed:
+        return 0.0
+    s = started if started.tzinfo else started.replace(tzinfo=timezone.utc)
+    c = completed if completed.tzinfo else completed.replace(tzinfo=timezone.utc)
+    return max(0.1, round((c - s).total_seconds(), 2))
+
+
 class ScanWorker:
     """Orchestrates async background scanning jobs and real-time SSE stream events."""
 
@@ -243,16 +252,12 @@ class ScanWorker:
 
             # 5. Finalize Scan Record
             completed_at = datetime.now(timezone.utc)
-            duration = (
-                (completed_at - scan.started_at).total_seconds()
-                if scan.started_at
-                else 0.0
-            )
+            duration = safe_duration(scan.started_at, completed_at)
 
             scan.status = "COMPLETED"
             scan.progress_phase = "Scan completed successfully"
             scan.completed_at = completed_at
-            scan.duration_seconds = max(0.1, round(duration, 2))
+            scan.duration_seconds = duration
             scan.risk_score = risk_score
             scan.raw_output = stdout
 
@@ -303,10 +308,7 @@ class ScanWorker:
                 scan.progress_phase = "Scan timed out"
                 scan.error_message = message
                 scan.completed_at = datetime.now(timezone.utc)
-                if scan.started_at:
-                    scan.duration_seconds = (
-                        scan.completed_at - scan.started_at
-                    ).total_seconds()
+                scan.duration_seconds = safe_duration(scan.started_at, scan.completed_at)
                 if scan.asset_id:
                     asset = db.query(Asset).filter(Asset.id == scan.asset_id).first()
                     if asset:
@@ -331,6 +333,7 @@ class ScanWorker:
                 scan.progress_phase = "Scan failed"
                 scan.error_message = message
                 scan.completed_at = datetime.now(timezone.utc)
+                scan.duration_seconds = safe_duration(scan.started_at, scan.completed_at)
                 if scan.asset_id:
                     asset = db.query(Asset).filter(Asset.id == scan.asset_id).first()
                     if asset:
@@ -354,6 +357,7 @@ class ScanWorker:
                 scan.status = "CANCELLED"
                 scan.progress_phase = "Scan cancelled by operator"
                 scan.completed_at = datetime.now(timezone.utc)
+                scan.duration_seconds = safe_duration(scan.started_at, scan.completed_at)
                 if scan.asset_id:
                     asset = db.query(Asset).filter(Asset.id == scan.asset_id).first()
                     if asset:

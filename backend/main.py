@@ -16,14 +16,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import init_db, get_db
+from app.database import init_db, get_db, SessionLocal
 from app.api import api_router
 from app.scanner.engine import is_nmap_available, NmapEngine
 from app.scanner.validator import validate_and_normalize_target
 from app.scanner.parser import parse_ports, parse_vulnerabilities
 from app.scanner.risk import calculate_risk_score
 from app.scanner.diff import compute_scan_diff
-from app.scanner.worker import scan_worker
+from app.scanner.worker import scan_worker, safe_duration
 from app.services.scheduler import scheduler_service
 from app.services.intelligence import intelligence_service
 from app.models.asset import Asset
@@ -42,9 +42,20 @@ logger = logging.getLogger("northstar.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown lifecycle management."""
     logger.info("Initializing database tables and bootstrap records...")
     init_db()
+
+    # Recover any stale scans left in RUNNING or QUEUED from an unexpected restart
+    with SessionLocal() as db:
+        stale_scans = db.query(Scan).filter(Scan.status.in_(["RUNNING", "QUEUED"])).all()
+        for s in stale_scans:
+            s.status = "FAILED"
+            s.progress_phase = "Scan interrupted by server restart"
+            s.error_message = "Scan process interrupted by server restart. Please re-run."
+            s.completed_at = datetime.now(timezone.utc)
+        if stale_scans:
+            db.commit()
+            logger.info("Recovered %d interrupted scan(s) from previous session", len(stale_scans))
 
     logger.info("Starting background scan worker...")
     scan_worker.start()
@@ -219,7 +230,7 @@ def _execute_sync_scan(target_raw: str, deep: bool, db: Session) -> Dict[str, An
     risk_score, _ = calculate_risk_score(ports, vulns, crit, env, tags)
 
     completed_at = datetime.now(timezone.utc)
-    duration = (completed_at - started_at).total_seconds()
+    duration = safe_duration(started_at, completed_at)
 
     scan.status = "COMPLETED"
     scan.progress_phase = "Completed"

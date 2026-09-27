@@ -25,10 +25,18 @@ class QuickScanProfile(BaseScanProfile):
         return [
             settings.NMAP_BINARY,
             "-sT",
+            "-sV",
+            "--version-intensity",
+            "1",
             "-Pn",
             "-T4",
             "--top-ports",
-            "1000",
+            "100",
+            "--open",
+            "--max-retries",
+            "1",
+            "--host-timeout",
+            "60s",
             "-oN",
             "-",
             target,
@@ -37,7 +45,7 @@ class QuickScanProfile(BaseScanProfile):
 
 class FullScanProfile(BaseScanProfile):
     name = "full"
-    description = "Comprehensive Vulnerability Assessment (TCP + Service Versions + NSE Vulnerability Scripts)"
+    description = "Comprehensive Vulnerability Assessment (TCP + Versions + NSE Vuln Scripts)"
     timeout_seconds = settings.DEEP_SCAN_TIMEOUT
 
     def build_args(self, target: str) -> List[str]:
@@ -45,12 +53,21 @@ class FullScanProfile(BaseScanProfile):
             settings.NMAP_BINARY,
             "-sT",
             "-sV",
+            "--version-intensity",
+            "2",
             "-Pn",
             "-T4",
+            "--top-ports",
+            "1000",
+            "--open",
+            "--max-retries",
+            "2",
             "--script",
             "vuln",
             "--script-timeout",
-            "120s",
+            "60s",
+            "--host-timeout",
+            "300s",
             "-oN",
             "-",
             target,
