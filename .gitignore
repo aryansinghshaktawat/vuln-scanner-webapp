@@ -279,3 +279,9 @@ temp/
 package-lock.json
 yarn.lock
 bun.lock
+
+# Databases & local state
+*.db
+*.sqlite
+*.sqlite3
+data/

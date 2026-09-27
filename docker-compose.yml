@@ -12,6 +12,11 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite:////app/data/vuln_scanner.db
+      - JWT_SECRET=dev-secret-key-change-in-production-32chars
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      - backend-storage:/app/data
     restart: unless-stopped
     networks:
       - vuln-scanner-network
@@ -24,12 +29,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
     restart: unless-stopped
     networks:
       - vuln-scanner-network
+
+volumes:
+  backend-storage:
 
 networks:
   vuln-scanner-network:

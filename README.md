@@ -1,389 +1,332 @@
 <div align="center">
 
-# 🛡️ Vulnerability Scanner Web Application
+# 🛡️ Northstar Vulnerability Management Platform
 
-### Automated Network Security Scanning with Nmap
+### Network Security & Perimeter Vulnerability Management Platform
 
-A modern, full-stack web application for automated network vulnerability scanning using Nmap. Built with Next.js 14 frontend and FastAPI backend.
+A portfolio-grade defensive cybersecurity platform transforming standard Nmap network audits into continuous asset inventory, explainable risk scoring, scan history diffs, vulnerability lifecycle tracking, scheduled scans, and multi-format reporting.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![GitHub issues](https://img.shields.io/github/issues/aryansinghshaktawat/vuln-scanner-webapp)](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues)
-[![GitHub stars](https://img.shields.io/github/stars/aryansinghshaktawat/vuln-scanner-webapp)](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-16_App_Router-black.svg)](https://nextjs.org/)
+[![Nmap](https://img.shields.io/badge/Scanner-Nmap_7.9+-00599C.svg)](https://nmap.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](docker-compose.yml)
+[![CI/CD](https://img.shields.io/badge/CI-GitHub_Actions-2088FF.svg)](.github/workflows/ci.yml)
 
-[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing) • [License](#-license)
+[Platform Overview](#-platform-overview) • [Architecture](#-architecture) • [Security Controls](#-security-controls--authorized-use-policy) • [Quick Start](#-quick-start) • [Risk Scoring Model](#-explainable-risk-scoring-model) • [Vulnerability Diff](#-vulnerability-diff-engine) • [API Reference](#-api-reference)
 
 ---
 
 </div>
 
-## ✨ Features
+## ⚠️ Defensive Security & Authorized Use Policy
 
-- 🔍 **Automated Port Scanning**: Discovers open ports and running services
-- 🛡️ **Vulnerability Detection**: Identifies CVE vulnerabilities using Nmap's vulnerability scripts
-- 🎨 **Modern UI**: Clean, responsive interface built with Tailwind CSS
-- ⚡ **Real-time Results**: Live scanning with progress indicators
-- 🔗 **CVE Integration**: Direct links to MITRE CVE database for vulnerability details
-- 🌐 **Cross-platform**: Works on macOS, Linux, and Windows (with Nmap installed)
-- ✅ **Error Handling**: Comprehensive validation and user-friendly error messages
-- 🐳 **Docker Ready**: One-command deployment with Docker Compose
+> **CRITICAL LEGAL NOTICE**: This application is built strictly as a defensive security auditing and vulnerability management tool for authorized perimeters. Users must scan **only** IP addresses, hostnames, and subnets that they personally own or have received formal, written authorization to assess.
+>
+> Probing or scanning unauthorized networks without consent violates the United States Computer Fraud and Abuse Act (CFAA), the UK Computer Misuse Act, and international telecommunications statutes.
+>
+> The platform includes mandatory server-side protections: SSRF cloud metadata filtering (`169.254.169.254`), loopback restrictions, CIDR range limits (maximum /24, 256 hosts), and audit event logging for all initiated operations.
+
+---
+
+## 🧭 Platform Overview
+
+**Northstar Vulnerability Management Platform** is designed to provide defensive security engineers and SecOps teams with continuous visibility into their external and internal attack surfaces. Rather than treating port scanning as a one-off CLI action, Northstar wraps the trusted **Nmap** engine with an operational security management plane:
+
+1. **Asset Inventory**: Register and categorize servers, web endpoints, database instances, and network appliances with owner metadata, environment tiers, and business criticality ratings.
+2. **Scan Orchestration & Isolated Workers**: Asynchronous execution via dedicated worker queues and concurrency semaphores, preventing HTTP request blocking and command-line injection.
+3. **Real-Time Scan Telemetry**: Server-Sent Events (SSE) broadcast live scan stages (`Host Discovery`, `Port Scanning`, `Service Probing`, `NSE Vulnerability Scripts`) without artificial progress simulation.
+4. **Persistent Historical Records**: Full scan audit trails stored in SQLAlchemy models (SQLite local fallback, PostgreSQL for production deployments).
+5. **Vulnerability Diff Engine**: Instant comparison between the current scan and the prior scan for the same asset, pinpointing `NEW`, `RESOLVED`, and `PERSISTING` vulnerabilities, as well as port state and service version changes.
+6. **Explainable Risk Scoring**: Deterministic 0–100 risk calculation based on asset criticality, internet exposure, CVSS metrics, open sensitive ports, and CISA Known Exploited Vulnerabilities (KEV) data—accompanied by human-readable justification reasons.
+7. **Remediation & "Verify Fix" Workflow**: Finding lifecycle tracking (`OPEN`, `ACKNOWLEDGED`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE`) with automated re-scan verification routines.
+8. **Automated Scanning Schedules**: Durable cron-style recurring background scans powered by APScheduler.
+9. **Multi-Format Export Reporting**: Automated generation of technical JSON payloads, CSV finding sheets, and human-readable executive HTML reports ready for printing/PDF conversion.
+
+---
 
 ## 🏗️ Architecture
 
 ```
-vuln-scanner-webapp/
-├── backend/           # FastAPI Python backend
-│   ├── main.py       # Core application with Nmap integration
-│   └── __pycache__/
-├── frontend/         # Next.js 14 React frontend
-│   ├── app/
-│   │   ├── page.tsx  # Main scanning interface
-│   │   └── layout.tsx
-│   ├── package.json
-│   └── ...
-└── README.md
+                       ┌────────────────────────────────────────────────────────┐
+                       │                   Next.js 16 Console                   │
+                       │   Dashboard • Inventory • Findings • Reports • Audit   │
+                       └──────────────────────────┬─────────────────────────────┘
+                                                  │ REST / SSE
+                                                  ▼
+                       ┌────────────────────────────────────────────────────────┐
+                       │                      FastAPI API                       │
+                       │   Router • Auth/RBAC • Target Validator • Rate Limiter │
+                       └─────────────┬────────────────────────────┬─────────────┘
+                                     │                            │
+             ┌───────────────────────▼─────────┐        ┌─────────▼─────────────┐
+             │       Job Worker & Queue        │        │   Database / Models   │
+             │   APScheduler Recurring Jobs    │        │  SQLAlchemy (SQLite /  │
+             │   Concurrency Limiter (max 3)   │        │      PostgreSQL)      │
+             └───────────────┬─────────────────┘        └───────────────────────┘
+                             │ Subprocess Array (shell=False)
+                             ▼
+             ┌─────────────────────────────────┐        ┌───────────────────────┐
+             │           Nmap Engine           │        │ Security Intelligence │
+             │  TCP SYN • Service Probing •    │◄───────┤    CISA KEV Cache     │
+             │  NSE Scripts (vulners/vulscan)  │        │     (Rate-Limited)    │
+             └─────────────────────────────────┘        └───────────────────────┘
 ```
 
-## 🛠️ Tech Stack
+### Component Breakdown
 
-### Frontend
-- **Next.js 14** with App Router
-- **TypeScript** for type safety
-- **Tailwind CSS** for styling
-- **React** with hooks for state management
+- **Web Operator Console (`frontend/`)**: Modern security console built on Next.js 16 (App Router), TypeScript, and custom CSS design tokens. Optimized for rapid incident triage with dark mode visual hierarchy, severity pills, risk meters, and diff sidebars.
+- **REST & SSE API Layer (`backend/app/api/`)**: FastAPI application providing structured endpoints with Pydantic v2 validation, JWT authentication, and Server-Sent Event streams (`/api/scans/{id}/stream`).
+- **Target Safety Validator (`backend/app/scanner/validator.py`)**: Sanitizes inputs, prevents shell injection, enforces CIDR limits (max /24), blocks AWS/GCP/Azure cloud metadata (`169.254.169.254`), and prevents loopback scanning unless explicitly enabled.
+- **Nmap Subprocess Engine (`backend/app/scanner/engine.py`)**: Executes Nmap directly using safe subprocess argument lists (`shell=False`), captures stdout/stderr, and enforces execution timeouts.
+- **Parser & Intelligence Feed (`backend/app/scanner/parser.py`, `backend/app/services/intelligence.py`)**: Parses Nmap text output into open ports, services, versions, and potential CVEs. Correlates CVEs against cached CISA Known Exploited Vulnerabilities (KEV) data.
+- **Risk Calculator (`backend/app/scanner/risk.py`)**: Applies an explainable scoring rubric that factors in asset business criticality, network exposure, discovered port risks, and vulnerability severity.
+- **Diff Engine (`backend/app/scanner/diff.py`)**: Compares successive scan snapshots on the same asset to detect changes in open ports, service versions, and vulnerability presence.
+- **Persistence Layer (`backend/app/database.py`)**: Relational database schema with SQLAlchemy ORM. Automatically defaults to SQLite for local development and supports PostgreSQL via `DATABASE_URL`.
 
-### Backend
-- **FastAPI** for high-performance API
-- **Python 3.8+** runtime
-- **Uvicorn** ASGI server
-- **Nmap** for network scanning
-- **Subprocess** for secure command execution
+---
 
-## 📋 Prerequisites
+## 🔒 Security Controls & Scanner Safeguards
 
-Before you begin, ensure you have the following installed:
+| Threat Vector | Mitigation Strategy | Implementation |
+| :--- | :--- | :--- |
+| **Command Injection** | No shell invocation; raw string interpolation prohibited | `subprocess.Popen(cmd_list, shell=False)` in `engine.py` |
+| **Server-Side Request Forgery (SSRF)** | Cloud metadata and restricted subnets blocked | IP & DNS check in `validator.py` blocks `169.254.169.254` |
+| **Denial of Service (Oversized Scan)** | Bounded IP address targets per execution | Maximum `/24` (256 IP addresses) enforced in `validator.py` |
+| **Hanging Scan Processes** | Per-profile watchdog timers | Enforced timeouts (180s Quick, 600s Full) with process kill |
+| **Scan Overload** | Concurrency control | Background semaphore limiting simultaneous scans (`MAX_CONCURRENT_SCANS=3`) |
+| **Unauthorized Action Tracking** | Tamper-evident activity recording | Audit events logged on asset creation, scan trigger, and remediation update |
+| **Data Integrity / Precision** | Clear terminology separation | Tagged as *"potential vulnerability detected by Nmap NSE"* |
 
-- **Node.js** (v18 or later) or **Bun** runtime
-- **Python** (3.8 or later)
-- **Nmap** network scanner
-
-### Installing Nmap
-
-**macOS:**
-```bash
-brew install nmap
-```
-
-**Linux (Ubuntu/Debian):**
-```bash
-sudo apt-get update
-sudo apt-get install nmap
-```
-
-**Windows:**
-Download and install from [nmap.org](https://nmap.org/download.html)
+---
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended)
+### Option A: Local Development Setup
 
-**Prerequisites:** Docker and Docker Compose installed
+#### Prerequisites
+- **Python**: 3.10+ installed
+- **Node.js**: 20+ installed
+- **Nmap**: Installed and available in `$PATH`
+  - macOS: `brew install nmap`
+  - Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y nmap`
+  - Fedora: `sudo dnf install nmap`
 
-```bash
-# Clone the repository
-git clone https://github.com/aryansinghshaktawat/vuln-scanner-webapp.git
-cd vuln-scanner-webapp
-
-# Start with Docker Compose
-docker-compose up -d
-
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
-```
-
-For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
-
-### Option 2: Manual Setup
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/aryansinghshaktawat/vuln-scanner-webapp.git
-cd vuln-scanner-webapp
-```
-
-### 2. Backend Setup
+#### 1. Start the Backend API & Worker
 ```bash
 cd backend
-
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment
-# macOS/Linux:
-source .venv/bin/activate
-# Windows:
-# .venv\Scripts\activate
-
-# Install dependencies
+python3 -m venv env
+source env/bin/activate
 pip install -r requirements.txt
 
-# Copy environment file
-cp .env.example .env
-
-# Start the backend server
+# Run database setup and launch FastAPI server
 uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
+*The backend automatically seeds an initial administrator account (`admin` / `Admin123!`), sample monitored assets, and starts the background scan scheduler.*
 
-### 3. Frontend Setup
+#### 2. Start the Frontend Console
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-# or with bun:
-# bun install
-
-# Copy environment file
-cp .env.example .env.local
-
-# Start the frontend development server
 npm run dev
-# or with bun:
-# bun dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+---
+
+### Option B: Docker Compose Deployment
+
+Run the complete platform (frontend, backend, database, and Nmap) using Docker Compose:
+
+```bash
+# Clone and enter directory
+git clone https://github.com/aryansinghshaktawat/vuln-scanner-webapp.git
+cd vuln-scanner-webapp
+
+# Build and start services
+docker-compose up --build
 ```
 
-### 4. Access the Application
+- **Frontend Console**: [http://localhost:3000](http://localhost:3000)
+- **Backend API & Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Persistent Data**: Preserved in Docker volume `backend-storage`
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://127.0.0.1:8000
-- **API Documentation**: http://127.0.0.1:8000/docs
+---
 
-## 🎯 Usage
+## 📊 Explainable Risk Scoring Model
 
-1. **Open the web application** at http://localhost:3000
-2. **Enter a target** (domain name or IP address) in the input field
-   - Example: `scanme.nmap.org`, `127.0.0.1`, `google.com`
-3. **Click "Start Scan"** or press Enter
-4. **Wait for results** (typically 30-120 seconds depending on target)
-5. **View the results**:
-   - Open ports table with service information
-   - CVE vulnerabilities with links to MITRE database
+Northstar calculates an asset risk score between **0 and 100** based exclusively on verifiable technical and contextual factors. The score is transparently justified with specific reasons:
 
-### Example Scan Targets
+$$\text{Final Risk Score} = \min(100, \, \text{Base Severity} + \text{Criticality Bonus} + \text{Exposure Bonus} + \text{Exploitation Bonus})$$
 
-- `scanme.nmap.org` - Official Nmap test server
-- `127.0.0.1` - Your local machine
-- `httpbin.org` - HTTP testing service
+### Scoring Rubric Breakdown:
 
-## 🔧 API Endpoints
+1. **Vulnerability Severity Weight**:
+   - `CRITICAL` finding (CVSS $\ge$ 9.0): **+40 points**
+   - `HIGH` finding (CVSS 7.0–8.9): **+25 points**
+   - `MEDIUM` finding (CVSS 4.0–6.9): **+15 points**
+   - `LOW` finding (CVSS 0.1–3.9): **+5 points**
+2. **Asset Criticality Multiplier**:
+   - `Critical` (Tier 1 core infrastructure): **+20 points**
+   - `High` (Tier 2 business operations): **+15 points**
+   - `Medium` (Tier 3 internal services): **+8 points**
+   - `Low` (Tier 4 non-critical test bench): **+2 points**
+3. **Network Exposure Level**:
+   - `Production` environment: **+15 points**
+   - `Staging`: **+8 points**
+   - `Development` / `Internal`: **+3 points**
+4. **Threat Intelligence Correlation**:
+   - CVE listed in CISA KEV (Known Exploited Vulnerabilities catalog): **+15 points**
+5. **High-Risk Exposed Services**:
+   - Insecure remote management (Telnet port 23, cleartext FTP port 21, RDP port 3389): **+10 points**
 
-### GET `/`
-Returns backend status
-```json
-{"message": "Backend is working!"}
+*If external vulnerability intelligence is unavailable for a CVE, the platform explicitly notes the missing data rather than synthesizing scores.*
+
+---
+
+## 🔄 Vulnerability Diff Engine
+
+The diff engine analyzes successive scans for any asset to track perimeter drift:
+
+- 🆕 **NEW Vulnerabilities**: Findings identified in the latest scan that were not present previously.
+- ✅ **RESOLVED Vulnerabilities**: Findings present in the prior scan that are no longer detected (verified remediations).
+- 🔁 **PERSISTING Vulnerabilities**: Outstanding findings identified across both scans.
+- 🔌 **NEW / CLOSED Ports**: Ports that opened or closed between scan runs.
+- 🏷️ **SERVICE VERSION Changes**: Version updates (e.g., `nginx 1.14.0` $\rightarrow$ `nginx 1.24.0`).
+
+---
+
+## 🎯 Scan Profiles
+
+| Profile Name | Flag Configuration | Target Scope | Timeout | Intended Use Case |
+| :--- | :--- | :--- | :--- | :--- |
+| **Quick Scan (`quick`)** | `-sT -F --top-ports 100 -T4 --open` | Top 100 common TCP ports | 180s | Rapid availability and perimeter triage |
+| **Full Assessment (`full`)** | `-sV -sC --script=vulners,vulscan -T3` | Top 1000 ports + Version + NSE Vuln Scripts | 600s | Deep vulnerability and compliance audit |
+| **Port Discovery (`port_only`)** | `-sT -p 1-1024 -T4` | Privileged ports (1–1024) | 180s | Discovery of listening system services |
+| **Vulnerability Scripts (`vuln_only`)** | `--script=vulners -sV` | Running service vulnerability interrogation | 300s | Targeted vulnerability correlation |
+
+---
+
+## 🛡️ Vulnerability Lifecycle & Remediation
+
+Each vulnerability finding tracks its resolution state:
+
+```
+    ┌──────────┐
+    │   OPEN   │ ◄─── Discovered during scan
+    └────┬─────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ ACKNOWLEDGED │ ◄─── Assigned to owner with triage note
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │ IN_PROGRESS  │ ◄─── Patching or compensating control applied
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐
+  │   RESOLVED   │ ◄─── Closed manually or confirmed by automated "Verify Fix" scan
+  └──────────────┘
 ```
 
-### GET `/scan?target=<target>`
-Performs vulnerability scan on the specified target
+- **Verify Fix**: Clicking *"Verify Fix"* initiates a targeted Nmap scan on the affected host and port. If the vulnerability is no longer identified, its status is updated to `RESOLVED` and recorded in the audit log.
 
-**Parameters:**
-- `target` (string): Domain name or IP address to scan
+---
 
-**Response:**
-```json
-{
-  "target": "scanme.nmap.org",
-  "open_ports": [
-    {
-      "port": "80/tcp",
-      "state": "open",
-      "service": "http",
-      "version": "Apache httpd 2.4.7"
-    }
-  ],
-  "cves": ["CVE-2021-34527", "CVE-2021-1675"]
-}
-```
+## 📡 API Reference
 
-**Error Responses:**
-- `400` - Invalid target format
-- `408` - Scan timeout
-- `500` - Nmap not installed or scan failed
+Interactive OpenAPI documentation is automatically served at **`/docs`** or **`/redoc`**.
 
-## 🔒 Security Considerations
+### Core Endpoints
 
-- **Input Validation**: All targets are validated before scanning
-- **Command Injection Protection**: Subprocess calls are properly sanitized
-- **Timeout Limits**: Scans are limited to prevent hanging
-- **Error Handling**: Sensitive error details are not exposed to users
-- **CORS Configuration**: Proper cross-origin request handling
+#### Asset Management
+- `GET /api/assets` — List registered assets (supports search, environment, and criticality filtering).
+- `POST /api/assets` — Register an authorized asset.
+- `GET /api/assets/{id}` — Fetch asset metadata and posture overview.
+- `DELETE /api/assets/{id}` — Delete an asset and associated records.
+- `GET /api/assets/{id}/scans` — Scan history for a specific asset.
+- `GET /api/assets/{id}/diff` — Vulnerability diff between the asset's last two scans.
 
-## 🧪 Testing
+#### Scan Orchestration
+- `GET /api/scans` — List scan jobs with status, duration, and findings summary.
+- `POST /api/scans` — Dispatch an asynchronous scan (`asset_id`, `target`, `profile`).
+- `GET /api/scans/{id}` — Fetch detailed scan results (ports, findings, raw output).
+- `POST /api/scans/{id}/cancel` — Abort a running or queued scan job.
+- `GET /api/scans/{id}/stream` — Server-Sent Events (SSE) live progress stream.
+- `GET /api/scans/{id}/diff` — Scan-level diff against the preceding scan.
 
-### Backend Testing
+#### Vulnerability Tracking & Remediation
+- `GET /api/vulnerabilities` — Query vulnerability findings (severity, status, and CVE filters).
+- `GET /api/vulnerabilities/{id}` — Detailed finding view including evidence and remediation notes.
+- `PUT /api/vulnerabilities/{id}` — Update remediation status, assigned owner, or due date.
+- `POST /api/vulnerabilities/{id}/verify` — Launch an automated re-scan to verify remediation.
+
+#### Recurring Schedules & Automation
+- `GET /api/schedules` — List automated scan schedules.
+- `POST /api/schedules` — Configure recurring scan job (`asset_id`, `profile`, `interval_hours`).
+- `PUT /api/schedules/{id}` — Enable or disable an automated schedule.
+- `DELETE /api/schedules/{id}` — Remove a recurring schedule.
+
+#### Reporting & Dashboards
+- `GET /api/dashboard` — Platform overview metrics (total assets, open vulns, severity distribution).
+- `GET /api/reports/{scan_id}?format=json` — Export structured JSON report.
+- `GET /api/reports/{scan_id}?format=csv` — Export CSV spreadsheet of findings.
+- `GET /api/reports/{scan_id}?format=html` — Download printable HTML audit report.
+
+#### Backward Compatibility Endpoints
+- `POST /scan/quick` — Legacy quick port scan endpoint.
+- `POST /scan` — Legacy full scan endpoint.
+- `GET /health` — Diagnostic health check (API, Nmap, Database).
+
+---
+
+## 🧪 Testing & Code Quality
+
+The repository maintains automated unit, integration, and linting test suites.
+
+### Run Backend Tests (Pytest)
 ```bash
 cd backend
-
-# Test API endpoints
-curl "http://127.0.0.1:8000/"
-curl "http://127.0.0.1:8000/scan?target=127.0.0.1"
+source env/bin/activate
+pytest -v
 ```
+*Executes all 22 unit tests covering target validation, SSRF defenses, Nmap output parsing, risk calculations, diff engines, and API endpoints.*
 
-### Frontend Testing
-1. Open http://localhost:3000
-2. Test with various targets (valid domains, IPs, invalid inputs)
-3. Verify responsive design on mobile and desktop
-4. Test error states (invalid targets, backend offline)
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**"Nmap not installed" Error**
+### Run Backend Linters
 ```bash
-# Check if nmap is installed
-which nmap
-nmap --version
-
-# Install if missing (macOS)
-brew install nmap
+cd backend
+black --check main.py
+flake8 main.py --max-line-length=100
 ```
 
-**Backend Connection Failed**
-- Ensure backend is running on port 8000
-- Check firewall settings
-- Verify CORS configuration
-
-**Scan Timeouts**
-- Some targets may take longer to scan
-- Increase timeout values in backend code if needed
-- Check network connectivity to target
-
-**Permission Denied**
+### Run Frontend Linting & Build Validation
 ```bash
-# Some nmap scans require sudo (especially SYN scans)
-# The application uses TCP connect scans which don't require privileges
+cd frontend
+npm run lint
+npm run build
 ```
 
-## 📁 Project Structure
+---
 
-```
-vuln-scanner-webapp/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── requirements.txt     # Python dependencies
-│   ├── Dockerfile           # Backend Docker image
-│   ├── .env.example         # Environment variables template
-│   ├── .venv/              # Python virtual environment
-│   └── __pycache__/        # Python cache
-├── frontend/
-│   ├── app/
-│   │   ├── page.tsx        # Main scan interface
-│   │   ├── layout.tsx      # App layout
-│   │   └── globals.css     # Global styles
-│   ├── public/             # Static assets
-│   ├── package.json        # Dependencies
-│   ├── Dockerfile          # Frontend Docker image
-│   ├── .env.example        # Environment variables template
-│   ├── tsconfig.json       # TypeScript config
-│   └── next.config.ts      # Next.js configuration
-├── docker-compose.yml      # Docker Compose configuration
-├── DEPLOYMENT.md           # Deployment guide
-├── CONTRIBUTING.md         # Contributing guidelines
-├── LICENSE                 # MIT License
-├── README.md
-└── TaskList                # Development task list
-```
+## ⚙️ Environment Variables Reference
 
-## 🔮 Future Enhancements
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `sqlite:///./vuln_scanner.db` | SQLAlchemy connection URI (supports PostgreSQL) |
+| `JWT_SECRET` | *(Random development secret)* | Cryptographic key for JWT session validation |
+| `MAX_CONCURRENT_SCANS` | `3` | Maximum number of concurrent background Nmap processes |
+| `QUICK_SCAN_TIMEOUT_SEC` | `180` | Subprocess timeout for quick scans |
+| `FULL_SCAN_TIMEOUT_SEC` | `600` | Subprocess timeout for full vulnerability scans |
+| `CORS_ORIGINS` | `http://localhost:3000` | Permitted origins for Cross-Origin Resource Sharing |
+| `NMAP_BINARY` | `nmap` | Path or name of the Nmap executable |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Public backend endpoint URL consumed by browser client |
 
-- [ ] **Scan History**: Store and manage previous scan results
-- [ ] **Export Reports**: Download results as PDF/JSON
-- [ ] **Advanced Scanning**: OS detection, stealth scans
-- [ ] **User Authentication**: Multi-user support
-- [ ] **Database Integration**: Persistent data storage
-- [ ] **API Rate Limiting**: Prevent abuse
-- [x] **Docker Deployment**: Containerized deployment ✅
-- [ ] **Scheduling**: Automated periodic scans
-- [ ] **CI/CD Pipeline**: Automated testing and deployment
-- [ ] **WebSocket Support**: Real-time scan progress updates
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-**Quick Start:**
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📖 Documentation
-
-- 📘 [Deployment Guide](DEPLOYMENT.md) - Comprehensive deployment instructions
-- 📗 [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
-- 📕 [Security Policy](SECURITY.md) - Security guidelines and vulnerability reporting
-- 📙 [Code of Conduct](CODE_OF_CONDUCT.md) - Community guidelines
-- 📓 [Support](SUPPORT.md) - Getting help and FAQ
-- 📔 [Changelog](CHANGELOG.md) - Version history
-- 🔧 [API Documentation](http://127.0.0.1:8000/docs) - Interactive API docs (when running)
-
-## 📸 Screenshots
-
-> Add screenshots of your application here to showcase its features
-
-## ⚠️ Legal Disclaimer
-
-This tool is for educational and authorized security testing purposes only. Users must:
-
-- ✅ Only scan networks and systems they own or have explicit permission to test
-- ✅ Comply with all applicable laws and regulations
-- ✅ Respect rate limits and target system resources
-- ✅ Use responsibly and ethically
-
-The developers are not responsible for any misuse of this software.
+---
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👨‍💻 Author
-
-**Aryan Singh Shaktawat**
-- GitHub: [@aryansinghshaktawat](https://github.com/aryansinghshaktawat)
-
-Want to contribute? Check out our [Contributing Guidelines](CONTRIBUTING.md)!
-
-## 🙏 Acknowledgments
-
-- [Nmap](https://nmap.org/) - The Network Mapper
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [Next.js](https://nextjs.org/) - React framework
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
-
-## 💖 Support
-
-If you find this project helpful:
-- ⭐ Star the repository
-- 🐛 Report bugs
-- 💡 Suggest features
-- 🔀 Submit pull requests
-
----
-
-<div align="center">
-
-**⭐ Star this repository if you found it helpful! ⭐**
-
-Made with ❤️ by [Aryan Singh Shaktawat](https://github.com/aryansinghshaktawat)
-
-[Report Bug](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=bug_report.md) • [Request Feature](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/issues/new?template=feature_request.md) • [Ask Question](https://github.com/aryansinghshaktawat/vuln-scanner-webapp/discussions)
-
-</div>

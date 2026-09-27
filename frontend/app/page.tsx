@@ -1,326 +1,402 @@
 "use client";
 
-import { useState, useEffect } from "react";
-
-interface Port {
-  port: string;
-  state: string;
-  service: string;
-  version: string;
-}
-
-interface ScanResult {
-  target: string;
-  open_ports: Port[];
-  cves: string[];
-}
-
-interface ScanError {
-  message: string;
-}
+import { useCallback, useEffect, useState, FormEvent } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
+import { SeverityBadge, StatusBadge } from "./components/Badges";
+import RiskGauge from "./components/RiskGauge";
+import NewScanModal from "./components/NewScanModal";
+import AddAssetModal from "./components/AddAssetModal";
+import { apiFetch, DashboardData, ScanRecord, Asset, VulnerabilityFinding } from "./lib/api";
 
 export default function Home() {
+  const router = useRouter();
+  const [metrics, setMetrics] = useState<DashboardData | null>(null);
+  const [recentScans, setRecentScans] = useState<ScanRecord[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [priorityFindings, setPriorityFindings] = useState<VulnerabilityFinding[]>([]);
+  
+  // Quick launcher state
   const [target, setTarget] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ScanResult | null>(null);
+  const [mode, setMode] = useState<"quick" | "full">("full");
+  const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scanTime, setScanTime] = useState(0);
 
-  // Timer for scan duration
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (loading) {
-      interval = setInterval(() => {
-        setScanTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      setScanTime(0);
+  // Modals
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [dashData, scansData, assetsData, findingsData] = await Promise.all([
+        apiFetch<DashboardData>("/api/dashboard"),
+        apiFetch<ScanRecord[]>("/api/scans?limit=5"),
+        apiFetch<Asset[]>("/api/assets"),
+        apiFetch<VulnerabilityFinding[]>("/api/vulnerabilities?limit=5&status=OPEN"),
+      ]);
+      setMetrics(dashData);
+      setRecentScans(scansData || []);
+      setAssets(assetsData || []);
+      setPriorityFindings(findingsData || []);
+    } catch (err) {
+      console.error("Failed to load dashboard data:", err);
     }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loadData]);
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleScan = async (quickMode = false) => {
-    if (!target.trim()) {
-      setError("Please enter a target (domain or IP address)");
+  const handleLaunchScan = async (e: FormEvent) => {
+    e.preventDefault();
+    const cleanTarget = target.trim();
+    if (!cleanTarget) {
+      setError("Please enter an IP address, hostname, or authorized CIDR range.");
       return;
     }
 
-    setLoading(true);
+    setLaunching(true);
     setError(null);
-    setResult(null);
-
-  // Prepare variables that may be referenced in catch block
-  let url = "";
-  const timeoutMs = 90_000; // 90 seconds
-
-  try {
-      const endpoint = quickMode ? "scan/quick" : "scan";
-      // Resolve API base URL from NEXT_PUBLIC_API_URL (set in env/docker) or
-      // fallback to the current page hostname with port 8000. Match the current
-      // page protocol to avoid mixed-content blocking (https page calling http).
-      const getApiBase = () => {
-        const envBase = (process.env as any).NEXT_PUBLIC_API_URL;
-        // If env specifies a full URL, use it (strip trailing slashes)
-        if (envBase) {
-          try {
-            const parsed = new URL(envBase);
-            return parsed.href.replace(/\/+$/g, "");
-          } catch {
-            // envBase might be a host like 'backend:8000' — prefix with current protocol
-            if (typeof window !== "undefined") {
-              return `${window.location.protocol}//${envBase}`.replace(/\/+$/g, "");
-            }
-            return `http://${envBase}`.replace(/\/+$/g, "");
-          }
-        }
-
-        if (typeof window !== "undefined") {
-          // Use current protocol and hostname so requests from the browser target the right host
-          return `${window.location.protocol}//${window.location.hostname}:8000`;
-        }
-
-        return "http://127.0.0.1:8000";
-      };
-
-      const apiBase = getApiBase();
-      url = `${apiBase}/${endpoint}?target=${encodeURIComponent(target.trim())}`;
-
-      // Use AbortController to avoid hanging requests and present a clearer error
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-      let response: Response;
-      try {
-        response = await fetch(url, { mode: "cors", signal: controller.signal });
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Scan failed" }));
-        throw new Error(errorData.detail || `HTTP ${response.status}: Scan failed`);
-      }
-
-      const data: ScanResult = await response.json();
-      setResult(data);
+    try {
+      const scan = await apiFetch<ScanRecord>("/api/scans", {
+        method: "POST",
+        body: JSON.stringify({
+          target: cleanTarget,
+          profile: mode,
+        }),
+      });
+      setTarget("");
+      router.push(`/scans/${scan.id}`);
     } catch (err) {
-      console.error("Scan error:", err, "url:", url);
-      if (err instanceof Error) {
-        if (err.name === "AbortError") {
-          setError(
-            `Request timed out after ${Math.round(timeoutMs / 1000)}s when calling ${url}`
-          );
-        } else {
-          setError(`${err.message} (request: ${url})`);
-        }
-      } else {
-        setError(`An unexpected error occurred when calling ${url}`);
-      }
+      setError(err instanceof Error ? err.message : "Unable to initiate scan.");
     } finally {
-      setLoading(false);
+      setLaunching(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      handleScan();
-    }
-  };
+  const totalAssets = metrics?.total_assets ?? assets.length;
+  const openVulns = metrics?.open_vulnerabilities ?? priorityFindings.length;
+  const critVulns = metrics?.critical_vulnerabilities ?? 0;
+  const highVulns = metrics?.high_vulnerabilities ?? 0;
+  const medVulns = metrics?.severity_breakdown.medium ?? 0;
+
+  // Environment risk score (weighted based on active vulns)
+  const envScore = Math.min(100, Math.max(12, critVulns * 25 + highVulns * 15 + medVulns * 6 + (totalAssets > 0 ? 10 : 0)));
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <header className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4 text-blue-400">
-            Vulnerability Scanner
-          </h1>
-          <p className="text-gray-300 text-lg">
-            Automated network security scanning with Nmap
-          </p>
-        </header>
+    <div className="app-shell">
+      <Sidebar assetCount={totalAssets} />
 
-        {/* Scan Input */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-8">
-          <div className="flex flex-col gap-4">
-            <input
-              type="text"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Enter domain or IP address (e.g., scanme.nmap.org)"
-              className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading}
-            />
-            <div className="flex flex-col md:flex-row gap-3">
-              <button
-                onClick={() => handleScan(true)}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-              >
-                Quick Scan (Ports Only)
-              </button>
-              <button
-                onClick={() => handleScan()}
-                disabled={loading}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
-              >
-                {loading ? "Scanning..." : "Full Scan (Ports + CVE)"}
-              </button>
-            </div>
+      <main className="main-content" id="overview">
+        <Topbar breadcrumbs={["Security Operations", "Overview"]} />
+
+        <section className="page-heading">
+          <div>
+            <p className="eyebrow">DEFENSIVE THREAT & EXPOSURE PLATFORM</p>
+            <h1>Security Posture Overview<span>.</span></h1>
+            <p className="muted">Continuous perimeter asset inventory, Nmap audit history, and vulnerability remediation.</p>
           </div>
-        </div>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button className="btn btn-outline" onClick={() => setIsAssetModalOpen(true)}>
+              + Add Asset
+            </button>
+            <button className="btn btn-primary" onClick={() => setIsScanModalOpen(true)}>
+              New Scan ↗
+            </button>
+          </div>
+        </section>
 
-        {/* Loading State */}
-        {loading && (
-          <div className="bg-gray-800 rounded-lg p-6 mb-8">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-              <span className="ml-3 text-gray-300">
-                Running security scan... {formatTime(scanTime)} elapsed
+        {/* Top Key Metrics */}
+        <section className="stats-grid" aria-label="Security overview metrics">
+          <div className="stat-card">
+            <div className="stat-top">
+              <span>Monitored Assets</span>
+              <span className="stat-icon blue">◈</span>
+            </div>
+            <strong>{totalAssets}</strong>
+            <small className="trend neutral">
+              {metrics?.scanned_recently ?? 0} <i>audited recently</i>
+            </small>
+            <div className="sparkline blue-line" />
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-top">
+              <span>Open Findings</span>
+              <span className="stat-icon coral">!</span>
+            </div>
+            <strong>{openVulns}</strong>
+            <small className="trend down">
+              ↓ {metrics?.resolved_vulnerabilities_7d ?? 0} <i>resolved this week</i>
+            </small>
+            <div className="sparkline coral-line" />
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-top">
+              <span>Critical Severity</span>
+              <span className="stat-icon amber">⌁</span>
+            </div>
+            <strong style={{ color: critVulns > 0 ? "var(--coral)" : "inherit" }}>
+              {String(critVulns).padStart(2, "0")}
+            </strong>
+            <small className="trend up">
+              +{metrics?.new_vulnerabilities_7d ?? 0} <i>new in 7 days</i>
+            </small>
+            <div className="sparkline amber-line" />
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-top">
+              <span>Asset Coverage</span>
+              <span className="stat-icon green">✓</span>
+            </div>
+            <strong>
+              {totalAssets > 0 ? Math.round(((metrics?.scanned_recently || 0) / totalAssets) * 100) : 100}
+              <small>%</small>
+            </strong>
+            <small className="trend up">
+              Active Nmap worker
+            </small>
+            <div className="sparkline green-line" />
+          </div>
+        </section>
+
+        {/* Main Content Grid: Scanner Panel + Environment Risk Posture */}
+        <div className="content-grid">
+          <section className="panel scan-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">AUTHORIZED NETWORK AUDIT</p>
+                <h2>Start an automated scan</h2>
+              </div>
+              <span className="live-pill">
+                <i /> NMAP ENGINE READY
               </span>
             </div>
-            <div className="mt-4 text-sm text-gray-400 text-center">
-              <p>• Quick scan (ports only): ~2-3 minutes</p>
-              <p>• Full scan with CVE detection: ~5-10 minutes</p>
-              <div className="mt-2 text-xs text-gray-500">
-                {scanTime > 300 && "Deep vulnerability scanning in progress... This can take up to 10 minutes."}
-                {scanTime > 180 && scanTime <= 300 && "Vulnerability scanning in progress..."}
-                {scanTime > 120 && scanTime <= 180 && "Running CVE detection scripts..."}
-                {scanTime > 60 && scanTime <= 120 && "Service detection in progress..."}
-                {scanTime <= 60 && "Port scanning in progress..."}
+
+            <form onSubmit={handleLaunchScan}>
+              <label htmlFor="target">
+                Target <span>IP, domain, or subnet range (max /24)</span>
+              </label>
+              <div className="target-input">
+                <span>⌕</span>
+                <input
+                  id="target"
+                  className="mono"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder="e.g. 10.24.18.0/24 or api.staging.northstar.io"
+                  disabled={launching}
+                />
               </div>
-              {scanTime > 360 && (
-                <div className="mt-3 p-3 bg-yellow-900 border border-yellow-700 rounded text-yellow-300 text-sm">
-                  ⚠️ Scan is taking longer than expected. The target may be slow to respond or have many services to check.
+
+              <div className="scan-options">
+                <div>
+                  <label>Scan profile</label>
+                  <div className="segmented">
+                    <button
+                      type="button"
+                      className={mode === "quick" ? "selected" : ""}
+                      onClick={() => setMode("quick")}
+                      disabled={launching}
+                    >
+                      Quick discovery <small>Port discovery</small>
+                    </button>
+                    <button
+                      type="button"
+                      className={mode === "full" ? "selected" : ""}
+                      onClick={() => setMode("full")}
+                      disabled={launching}
+                    >
+                      Full assessment <small>NSE vuln scripts</small>
+                    </button>
+                  </div>
                 </div>
-              )}
+
+                <button className="primary-button" type="submit" disabled={launching}>
+                  {launching ? "Queueing scan..." : "Run scan →"}
+                </button>
+              </div>
+            </form>
+
+            <div className="scan-note">
+              <span>🛡️</span>
+              <p>
+                Only scan systems you own or have explicit authorization to test. Subprocess isolation,
+                SSRF filtering, and rate bounds are enforced server-side.
+              </p>
             </div>
-          </div>
-        )}
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-900 border border-red-700 rounded-lg p-6 mb-8">
-            <h3 className="text-lg font-semibold text-red-400 mb-2">Scan Failed</h3>
-            <p className="text-red-300">{error}</p>
-          </div>
-        )}
-
-        {/* Results */}
-        {result && (
-          <div className="space-y-8">
-            {/* Summary */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <h2 className="text-2xl font-bold mb-4 text-green-400">
-                Scan Results for {result.target}
-              </h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-gray-700 rounded p-4">
-                  <h3 className="text-lg font-semibold text-blue-400">Open Ports</h3>
-                  <p className="text-3xl font-bold text-white">
-                    {result.open_ports.length}
-                  </p>
-                </div>
-                <div className="bg-gray-700 rounded p-4">
-                  <h3 className="text-lg font-semibold text-red-400">CVE Vulnerabilities</h3>
-                  <p className="text-3xl font-bold text-white">
-                    {result.cves.length}
-                  </p>
-                </div>
+            {error && (
+              <div className="error-message" role="alert">
+                {error}
               </div>
+            )}
+          </section>
+
+          {/* Risk Posture Panel */}
+          <section className="panel posture-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">POSTURE & PRIORITIZATION</p>
+                <h2>Environment Risk</h2>
+              </div>
+              <Link href="/vulnerabilities" className="text-link">Manage →</Link>
             </div>
 
-            {/* Open Ports Table */}
-            {result.open_ports.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h3 className="text-xl font-bold mb-4 text-blue-400">Open Ports</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-700">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
-                          Port
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
-                          State
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
-                          Service
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-300">
-                          Version
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.open_ports.map((port, index) => (
-                        <tr key={index} className="border-b border-gray-700 hover:bg-gray-700">
-                          <td className="py-3 px-4 font-mono text-blue-300">
-                            {port.port}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                              port.state === "open" 
-                                ? "bg-green-900 text-green-300" 
-                                : "bg-gray-700 text-gray-300"
-                            }`}>
-                              {port.state}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-gray-300">{port.service}</td>
-                          <td className="py-3 px-4 text-gray-400 text-xs">
-                            {port.version}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+            <RiskGauge
+              score={envScore}
+              showReasons={false}
+            />
 
-            {/* CVE List */}
-            {result.cves.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-6">
-                <h3 className="text-xl font-bold mb-4 text-red-400">
-                  CVE Vulnerabilities
-                </h3>
-                <div className="space-y-2">
-                  {result.cves.map((cve, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-700 rounded p-3">
-                      <span className="font-mono text-red-300">{cve}</span>
-                      <a
-                        href={`https://cve.mitre.org/cgi-bin/cvename.cgi?name=${cve}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-sm font-medium"
-                      >
-                        View Details →
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="risk-breakdown" style={{ marginTop: "auto" }}>
+              <span>
+                <i className="dot coral" />
+                Critical <b>{critVulns}</b>
+              </span>
+              <span>
+                <i className="dot amber" />
+                High <b>{highVulns}</b>
+              </span>
+              <span>
+                <i className="dot blue-dot" />
+                Medium <b>{medVulns}</b>
+              </span>
+            </div>
+          </section>
+        </div>
 
-            {/* No Results */}
-            {result.open_ports.length === 0 && result.cves.length === 0 && (
-              <div className="bg-gray-800 rounded-lg p-6 text-center">
-                <p className="text-gray-400">
-                  No open ports or vulnerabilities detected.
-                </p>
-              </div>
-            )}
+        {/* Recent Scans Activity */}
+        <section className="panel activity-panel" id="scans">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">ACTIVITY TRAIL</p>
+              <h2>Recent Scans</h2>
+            </div>
+            <Link className="text-link" href="/scans">View all scans →</Link>
           </div>
-        )}
-      </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>Profile</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Risk Score</th>
+                  <th>Discovered Findings</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentScans.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "24px", color: "#94a3b8" }}>
+                      No scan records yet. Run your first scan above or add an asset to inventory.
+                    </td>
+                  </tr>
+                ) : (
+                  recentScans.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <span className="target-dot" />
+                        <Link href={`/scans/${item.id}`} style={{ color: "var(--ink)", fontWeight: 600, textDecoration: "none" }}>
+                          {item.target}
+                        </Link>
+                      </td>
+                      <td style={{ textTransform: "capitalize" }}>{item.profile}</td>
+                      <td>
+                        <StatusBadge status={item.status} />
+                      </td>
+                      <td>{item.duration_seconds ? `${item.duration_seconds}s` : "-"}</td>
+                      <td>
+                        <span style={{ fontWeight: 700, color: item.risk_score >= 60 ? "var(--coral)" : "var(--teal)" }}>
+                          {item.risk_score} / 100
+                        </span>
+                      </td>
+                      <td>{item.findings?.length || 0} findings</td>
+                      <td>
+                        <Link href={`/scans/${item.id}`} className="text-link" style={{ fontWeight: 600 }}>
+                          Inspect →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Priority Findings / Action Items */}
+        <section className="panel findings-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">REMEDIATION PRIORITY QUEUE</p>
+              <h2>Active Vulnerability Findings</h2>
+            </div>
+            <Link className="text-link" href="/vulnerabilities">
+              Full Remediation Tracker →
+            </Link>
+          </div>
+
+          {priorityFindings.length === 0 ? (
+            <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
+              ✓ No critical or high unaddressed findings across the monitored attack surface.
+            </div>
+          ) : (
+            <div className="finding-list">
+              {priorityFindings.map((finding) => (
+                <div key={finding.id} className="finding-row">
+                  <SeverityBadge severity={finding.severity} />
+                  <div>
+                    <strong style={{ fontSize: "12px" }}>
+                      <Link href={`/vulnerabilities/${finding.id}`} style={{ color: "inherit", textDecoration: "none" }}>
+                        {finding.cve_id}: {finding.title}
+                      </Link>
+                    </strong>
+                    <small>
+                      {finding.affected_host} {finding.affected_port ? `· Port ${finding.affected_port}` : ""} · {finding.service || "network"}
+                    </small>
+                  </div>
+                  <span className="finding-age">
+                    {finding.status}
+                  </span>
+                  <Link href={`/vulnerabilities/${finding.id}`} className="text-link" style={{ fontSize: "11px" }}>
+                    Details
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <footer>
+          <span>Northstar Security Platform &bull; Professional Network Vulnerability Management</span>
+          <span>Defensive Security Architecture &bull; Nmap Scanning Engine</span>
+        </footer>
+      </main>
+
+      {/* Modals */}
+      <NewScanModal
+        isOpen={isScanModalOpen}
+        onClose={() => setIsScanModalOpen(false)}
+        assets={assets}
+      />
+      <AddAssetModal
+        isOpen={isAssetModalOpen}
+        onClose={() => setIsAssetModalOpen(false)}
+        onAssetAdded={(newAsset) => {
+          setAssets((prev) => [newAsset, ...prev]);
+          loadData();
+        }}
+      />
     </div>
   );
 }

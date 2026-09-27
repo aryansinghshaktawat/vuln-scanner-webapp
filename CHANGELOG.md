@@ -5,22 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-09-27
 
 ### Added
-- Docker support with Dockerfile for both backend and frontend
-- Docker Compose configuration for easy deployment
-- Environment configuration with .env.example files
-- Comprehensive deployment guide (DEPLOYMENT.md)
-- Contributing guidelines (CONTRIBUTING.md)
-- Security policy (SECURITY.md)
-- CI/CD workflows with GitHub Actions
-- License file (MIT License)
+- **Asset Inventory System**: CRUD operations for managing IP addresses, hostnames, and subnets with criticality (Critical, High, Medium, Low), environment tiers, ownership, and tags.
+- **Persistent Database Layer**: Full SQLAlchemy models for Users, Assets, Scans, PortFindings, VulnerabilityFindings, ScanSchedules, AuditEvents, and Notifications. Supports SQLite and PostgreSQL.
+- **Asynchronous Background Scanner & SSE**: Non-blocking background worker queue (`ScanWorker`) with concurrency controls (`MAX_CONCURRENT_SCANS=3`) and Server-Sent Events (`/api/scans/{id}/stream`) for real-time phase updates.
+- **Explainable Risk Scoring Engine**: Deterministic 0–100 risk scoring algorithm factoring asset criticality, network exposure, CVSS metrics, open sensitive ports, and CISA KEV data with human-readable justification reasons.
+- **Vulnerability Diff Engine**: Snapshot comparator identifying NEW, RESOLVED, and PERSISTING vulnerabilities, as well as port and service version changes between consecutive scans.
+- **Vulnerability Remediation Tracking**: Finding lifecycle management (`OPEN`, `ACKNOWLEDGED`, `IN_PROGRESS`, `RESOLVED`, `FALSE_POSITIVE`) with automated "Verify Fix" re-scanning workflows.
+- **Scheduled Automated Scanning**: Recurring scan scheduler powered by APScheduler supporting customizable intervals and automatic job queuing.
+- **Multi-Format Report Generator**: Export scan assessments in structured JSON, CSV finding spreadsheets, and print-ready executive HTML reports.
+- **Target Safety & SSRF Safeguards**: Mandatory validation preventing shell command injection, blocking cloud metadata addresses (`169.254.169.254`), and enforcing CIDR boundaries (max /24).
+- **Security Operations Console UI**: Next.js 16 operator console featuring interactive dashboards, asset profiles, live scan terminals, diff viewers, and settings.
+- **Automated Test Suite**: 22 unit and integration tests covering SSRF validation, Nmap parsing, risk scoring, diff algorithms, and REST APIs.
 
 ### Changed
-- Updated Next.js configuration for standalone output
-- Enhanced requirements.txt with additional dependencies
-- Improved README with Docker deployment instructions
+- Refactored backend into clean modular packages (`app.api`, `app.scanner`, `app.models`, `app.services`, `app.core`).
+- Upgraded Next.js frontend to Next.js 16 App Router with strict TypeScript interfaces.
+- Enhanced Docker Compose with persistent database volume and modernized Dockerfiles.
+- Updated GitHub Actions CI to install Nmap, run Pytest, and validate builds on Node 20.
+- Preserved all legacy endpoints (`/scan/quick`, `/scan`, `/health`) for 100% backward compatibility.
 
 ## [1.0.0] - 2025-11-18
 

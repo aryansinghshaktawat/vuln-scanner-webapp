@@ -1,306 +1,444 @@
-import subprocess
-import re
+"""Northstar Network Vulnerability Management Platform.
+
+FastAPI Application Entry Point.
+Provides RESTful APIs, background scan worker orchestration, persistence layer,
+and backward-compatible legacy endpoints for Quick and Full Nmap scanning.
+"""
+
+import asyncio
 import logging
-import ipaddress
-import socket
-from typing import List, Dict
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import Any, Dict, List
+
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 
-app = FastAPI()
+from app.config import settings
+from app.database import init_db, get_db
+from app.api import api_router
+from app.scanner.engine import is_nmap_available, NmapEngine
+from app.scanner.validator import validate_and_normalize_target
+from app.scanner.parser import parse_ports, parse_vulnerabilities
+from app.scanner.risk import calculate_risk_score
+from app.scanner.diff import compute_scan_diff
+from app.scanner.worker import scan_worker
+from app.services.scheduler import scheduler_service
+from app.services.intelligence import intelligence_service
+from app.models.asset import Asset
+from app.models.scan import Scan
+from app.models.finding import VulnerabilityFinding, PortFinding
+from app.models.schedule import ScanSchedule
+import uuid
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure Logging
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("northstar.main")
 
-# Enable CORS for frontend
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup and shutdown lifecycle management."""
+    logger.info("Initializing database tables and bootstrap records...")
+    init_db()
+
+    logger.info("Starting background scan worker...")
+    scan_worker.start()
+
+    logger.info("Starting background scan scheduler...")
+    scheduler_service.start()
+
+    # Asynchronously refresh CISA KEV threat intelligence in background
+    asyncio.create_task(intelligence_service.refresh_cisa_kev())
+
+    yield
+
+    logger.info("Shutting down background services...")
+    scheduler_service.shutdown()
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description="Professional Network Vulnerability Management Platform powered by Nmap.",
+    lifespan=lifespan,
+)
+
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -----------------------------
-# VALIDATION FUNCTIONS
-# -----------------------------
+# Mount REST API
+app.include_router(api_router, prefix=settings.API_PREFIX)
 
 
-def validate_target(target: str) -> bool:
-    """Validates if target is a valid IP address or domain name."""
+# =========================================================================
+# BACKWARD COMPATIBILITY & SYSTEM HEALTH ENDPOINTS
+# Preserves existing quick/full scanning, health checks, and dashboard calls
+# =========================================================================
+
+
+@app.get("/", tags=["System"])
+def root() -> Dict[str, str]:
+    """Service status and identification."""
+    return {
+        "service": "northstar-security-platform",
+        "version": settings.VERSION,
+        "status": "ready",
+        "nmap_available": str(is_nmap_available()),
+    }
+
+
+@app.get("/health", tags=["System"])
+def health(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """System health check endpoint verifying database and Nmap availability."""
+    db_ok = False
     try:
-        # Try to parse as IP address
-        ipaddress.ip_address(target)
-        return True
-    except ValueError:
-        # Try to resolve as domain name
-        try:
-            socket.gethostbyname(target)
-            return True
-        except socket.gaierror:
-            return False
+        db.execute(Asset.__table__.select().limit(1))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    return {
+        "api": True,
+        "nmap": is_nmap_available(),
+        "database": db_ok,
+        "version": settings.VERSION,
+    }
 
 
-def check_nmap_installed() -> bool:
-    """Checks if nmap is installed on the system."""
+def _execute_sync_scan(target_raw: str, deep: bool, db: Session) -> Dict[str, Any]:
+    """Execute scan synchronously for legacy HTTP endpoints and persist results to DB."""
     try:
-        result = subprocess.run(
-            ["nmap", "--version"], capture_output=True, text=True, timeout=5
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
+        clean_target = validate_and_normalize_target(target_raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-
-# -----------------------------
-# NMAP SCANNING FUNCTIONS
-# -----------------------------
-
-
-def run_nmap_basic(target: str) -> str:
-    """Runs a basic Nmap scan with TCP connect."""
-    logger.info(f"Running basic scan on target: {target}")
-    try:
-        # Use -sT (TCP connect) which doesn't require root privileges
-        # Use -sV for version detection (may require sudo on some systems)
-        # Use -T4 for faster scanning (aggressive timing)
-        # Use -Pn to skip ping and assume host is up
-        result = subprocess.run(
-            ["nmap", "-sT", "-sV", "-T4", "-Pn", target],
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minutes for basic scan
-        )
-        if result.returncode != 0:
-            logger.error(
-                f"Nmap scan failed with return code {result.returncode}: {result.stderr}"
-            )
-            # If scan failed, try without -sV (version detection)
-            logger.info("Retrying scan without version detection...")
-            result = subprocess.run(
-                ["nmap", "-sT", "-T4", "-Pn", target],
-                capture_output=True,
-                text=True,
-                timeout=300,
-            )
-            if result.returncode != 0:
-                raise HTTPException(
-                    status_code=500, detail=f"Nmap scan failed: {result.stderr}"
-                )
-
-        logger.info("Basic scan completed successfully")
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        logger.error("Nmap scan timed out")
+    if not is_nmap_available():
         raise HTTPException(
-            status_code=408,
-            detail="Scan timed out after 5 minutes. Target may be unresponsive.",
-        )
-    except FileNotFoundError:
-        logger.error("Nmap not found on system")
-        raise HTTPException(status_code=500, detail="Nmap not installed on system")
-
-
-def parse_ports(nmap_output: str) -> List[Dict]:
-    """Extracts open ports + service info."""
-    ports = []
-    in_section = False
-
-    for line in nmap_output.splitlines():
-        line = line.strip()
-
-        if line.startswith("PORT"):
-            in_section = True
-            continue
-
-        if in_section and (line == "" or "Service detection" in line):
-            in_section = False
-
-        if in_section:
-            parts = line.split()
-            if len(parts) >= 3:
-                ports.append(
-                    {
-                        "port": parts[0],
-                        "state": parts[1],
-                        "service": parts[2],
-                        "version": " ".join(parts[3:]) if len(parts) > 3 else "",
-                    }
-                )
-
-    return ports
-
-
-def run_nmap_vuln(target: str) -> str:
-    """Runs Nmap vuln scripts."""
-    logger.info(f"Running vulnerability scan on target: {target}")
-    try:
-        # Use more efficient scan options:
-        # -sT: TCP connect scan (doesn't require root)
-        # -sV: Service version detection
-        # -T4: Faster timing template
-        # -Pn: Skip ping, assume host is up
-        # --script=vuln: Only vulnerability scripts
-        # --script-timeout=120s: Timeout individual scripts at 2 minutes
-        result = subprocess.run(
-            [
-                "nmap",
-                "-sT",
-                "-sV",
-                "-T4",
-                "-Pn",
-                "--script",
-                "vuln",
-                "--script-timeout",
-                "120s",
-                target,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=600,  # Increased to 10 minutes for vuln scans
-        )
-        if result.returncode != 0:
-            logger.warning(f"Nmap vuln scan completed with warnings: {result.stderr}")
-            # Try without -sV if it failed
-            logger.info("Retrying vulnerability scan without version detection...")
-            result = subprocess.run(
-                [
-                    "nmap",
-                    "-sT",
-                    "-T4",
-                    "-Pn",
-                    "--script",
-                    "vuln",
-                    "--script-timeout",
-                    "120s",
-                    target,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-
-        logger.info("Vulnerability scan completed")
-        return result.stdout
-    except subprocess.TimeoutExpired:
-        logger.error("Nmap vulnerability scan timed out")
-        raise HTTPException(
-            status_code=408,
-            detail=(
-                "Vulnerability scan timed out after 10 minutes. "
-                "Try using Quick Scan mode for faster results."
-            ),
-        )
-    except FileNotFoundError:
-        logger.error("Nmap not found on system")
-        raise HTTPException(status_code=500, detail="Nmap not installed on system")
-
-
-def extract_cves(nmap_output: str) -> List[str]:
-    """Extracts CVE numbers using regex."""
-    found = re.findall(r"CVE-\d{4}-\d+", nmap_output)
-    return list(sorted(set(found)))
-
-
-# -----------------------------
-# FASTAPI ROUTES
-# -----------------------------
-
-
-@app.get("/")
-def root():
-    return {"message": "Backend is working!"}
-
-
-@app.get("/scan/quick")
-def quick_scan_target(target: str):
-    """Quick scan endpoint - ports only, no vulnerabilities."""
-
-    # Validate input
-    if not target or target.strip() == "":
-        raise HTTPException(status_code=400, detail="Target parameter is required")
-
-    target = target.strip()
-
-    # Validate target format
-    if not validate_target(target):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid target. Must be a valid IP address or domain name",
+            status_code=503, detail="Nmap scanner is not available on this system"
         )
 
-    # Check if nmap is installed
-    if not check_nmap_installed():
-        raise HTTPException(
-            status_code=500, detail="Nmap is not installed on the system"
-        )
+    profile_name = "full" if deep else "quick"
+
+    # Find or link matching asset
+    asset = db.query(Asset).filter(Asset.target == clean_target).first()
+
+    scan_id = str(uuid.uuid4())
+    started_at = datetime.now(timezone.utc)
+    scan = Scan(
+        id=scan_id,
+        asset_id=asset.id if asset else None,
+        target=clean_target,
+        profile=profile_name,
+        status="RUNNING",
+        progress_phase="Executing scan",
+        started_at=started_at,
+        created_by="legacy_api",
+        created_at=started_at,
+    )
+    db.add(scan)
+    db.commit()
 
     try:
-        basic_output = run_nmap_basic(target)
-        ports = parse_ports(basic_output)
-
-        return {
-            "target": target,
-            "open_ports": ports,
-            "cves": [],  # No CVE scan for quick mode
-        }
-    except HTTPException:
-        # Re-raise HTTP exceptions (already handled)
-        raise
+        # Run Nmap subprocess
+        # Use asyncio runner to call NmapEngine cleanly
+        loop = asyncio.get_event_loop()
+        exit_code, stdout, stderr = loop.run_until_complete(
+            NmapEngine.run_scan(clean_target, profile_name)
+        )
+    except TimeoutError as e:
+        scan.status = "TIMEOUT"
+        scan.error_message = str(e)
+        scan.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=408, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error during quick scan: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail="An unexpected error occurred during the quick scan"
+        scan.status = "FAILED"
+        scan.error_message = str(e)
+        scan.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Scan execution error: {str(e)}")
+
+    # Parse ports
+    ports = parse_ports(stdout)
+    for p in ports:
+        db.add(
+            PortFinding(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                asset_id=asset.id if asset else None,
+                port=p["port"],
+                protocol=p["protocol"],
+                state=p["state"],
+                service=p["service"],
+                version=p["version"],
+            )
         )
 
-
-@app.get("/scan")
-def scan_target(target: str):
-    """Main API endpoint."""
-
-    # Validate input
-    if not target or target.strip() == "":
-        raise HTTPException(status_code=400, detail="Target parameter is required")
-
-    target = target.strip()
-
-    # Validate target format
-    if not validate_target(target):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid target. Must be a valid IP address or domain name",
+    # Parse vulnerabilities if full scan
+    vulns = parse_vulnerabilities(stdout, clean_target, ports) if deep else []
+    now = datetime.now(timezone.utc)
+    for v in vulns:
+        db.add(
+            VulnerabilityFinding(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                asset_id=asset.id if asset else None,
+                cve_id=v["cve_id"],
+                title=v["title"],
+                description=v["description"],
+                affected_host=v["affected_host"],
+                affected_port=v["affected_port"],
+                service=v["service"],
+                service_version=v["service_version"],
+                severity=v["severity"],
+                cvss_score=v["cvss_score"],
+                evidence=v["evidence"],
+                detection_source=v["detection_source"],
+                first_seen=now,
+                last_seen=now,
+                status="OPEN",
+                recommendation="Update service to current vendor release.",
+            )
         )
 
-    # Check if nmap is installed
-    if not check_nmap_installed():
-        raise HTTPException(
-            status_code=500, detail="Nmap is not installed on the system"
+    # Calculate explainable risk score
+    crit = asset.criticality if asset else "high"
+    env = asset.environment if asset else "production"
+    tags = asset.tags if asset else ""
+    risk_score, _ = calculate_risk_score(ports, vulns, crit, env, tags)
+
+    completed_at = datetime.now(timezone.utc)
+    duration = (completed_at - started_at).total_seconds()
+
+    scan.status = "COMPLETED"
+    scan.progress_phase = "Completed"
+    scan.completed_at = completed_at
+    scan.duration_seconds = max(0.1, round(duration, 2))
+    scan.risk_score = risk_score
+    scan.raw_output = stdout
+
+    if asset:
+        asset.last_scanned_at = completed_at
+        asset.scan_status = "COMPLETED"
+        asset.current_risk_score = risk_score
+
+    db.commit()
+
+    return {
+        "target": clean_target,
+        "open_ports": ports,
+        "cves": [v["cve_id"] for v in vulns],
+        "risk_score": risk_score,
+        "scanned_at": completed_at.isoformat(),
+        "scan_id": scan.id,
+    }
+
+
+@app.get("/scan/quick", tags=["Scanning"])
+def quick_scan_target(
+    target: str = Query(..., min_length=1, max_length=253),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Legacy quick discovery scan endpoint (ports & services)."""
+    return _execute_sync_scan(target, deep=False, db=db)
+
+
+@app.get("/scan", tags=["Scanning"])
+def scan_target(
+    target: str = Query(..., min_length=1, max_length=253),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Legacy full assessment scan endpoint (ports, services, version detection & CVEs)."""
+    return _execute_sync_scan(target, deep=True, db=db)
+
+
+@app.get("/assets", tags=["Legacy Compatibility"])
+def legacy_assets(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """Legacy assets listing endpoint."""
+    assets = db.query(Asset).all()
+    results = []
+    for a in assets:
+        findings_count = (
+            db.query(VulnerabilityFinding)
+            .filter(
+                VulnerabilityFinding.asset_id == a.id,
+                VulnerabilityFinding.status.in_(
+                    ["OPEN", "IN_PROGRESS", "ACKNOWLEDGED"]
+                ),
+            )
+            .count()
         )
+        results.append(
+            {
+                "id": a.id,
+                "target": a.target,
+                "criticality": a.criticality,
+                "owner": a.owner,
+                "last_seen": (
+                    a.last_scanned_at.strftime("%Y-%m-%d %H:%M")
+                    if a.last_scanned_at
+                    else "Never"
+                ),
+                "findings": findings_count,
+            }
+        )
+    return results
 
-    try:
-        basic_output = run_nmap_basic(target)
-        ports = parse_ports(basic_output)
 
-        vuln_output = run_nmap_vuln(target)
-        cves = extract_cves(vuln_output)
-
-        return {
-            "target": target,
-            "open_ports": ports,
-            "cves": cves,
+@app.get("/scans/history", tags=["Legacy Compatibility"])
+def legacy_scan_history(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """Legacy scan history endpoint."""
+    scans = db.query(Scan).order_by(Scan.created_at.desc()).limit(20).all()
+    return [
+        {
+            "id": s.id,
+            "target": s.target,
+            "time": s.created_at.strftime("%b %d, %H:%M") if s.created_at else "",
+            "status": s.status.capitalize(),
+            "findings": f"{len(s.findings)} findings",
+            "open_ports": len(s.ports),
+            "risk_score": s.risk_score,
+            "cves": [f.cve_id for f in s.findings],
         }
-    except HTTPException:
-        # Re-raise HTTP exceptions (already handled)
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during scan: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail="An unexpected error occurred during the scan"
+        for s in scans
+    ]
+
+
+@app.get("/scans/diff", tags=["Legacy Compatibility"])
+def legacy_scan_diff(
+    target: str = Query(..., min_length=1, max_length=253),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Legacy diff endpoint between latest two scans of a target."""
+    try:
+        clean_target = validate_and_normalize_target(target)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    scans = (
+        db.query(Scan)
+        .filter(Scan.target == clean_target, Scan.status == "COMPLETED")
+        .order_by(Scan.created_at.desc())
+        .limit(2)
+        .all()
+    )
+    current = scans[0] if len(scans) > 0 else None
+    previous = scans[1] if len(scans) > 1 else None
+
+    diff_res = compute_scan_diff(current, previous)
+    return {
+        "target": clean_target,
+        "added_cves": [v.cve_id for v in diff_res.new_vulnerabilities],
+        "removed_cves": [v.cve_id for v in diff_res.resolved_vulnerabilities],
+        "persisting_cves": [v.cve_id for v in diff_res.persisting_vulnerabilities],
+        "new_ports": [p.port for p in diff_res.new_ports],
+        "closed_ports": [p.port for p in diff_res.closed_ports],
+        "current": (
+            {
+                "id": current.id,
+                "risk_score": current.risk_score,
+                "cves": [f.cve_id for f in current.findings],
+            }
+            if current
+            else None
+        ),
+        "previous": (
+            {
+                "id": previous.id,
+                "risk_score": previous.risk_score,
+                "cves": [f.cve_id for f in previous.findings],
+            }
+            if previous
+            else None
+        ),
+    }
+
+
+@app.get("/schedules", tags=["Legacy Compatibility"])
+def legacy_schedules(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """Legacy schedules endpoint."""
+    schedules = db.query(ScanSchedule).all()
+    results = []
+    for s in schedules:
+        asset = db.query(Asset).filter(Asset.id == s.asset_id).first()
+        results.append(
+            {
+                "id": s.id,
+                "target": asset.target if asset else "unknown",
+                "cadence": s.cadence,
+                "next_run": (
+                    s.next_run.strftime("%a, %H:%M") if s.next_run else "Pending"
+                ),
+                "enabled": s.enabled,
+            }
         )
+    return results
+
+
+@app.get("/remediations", tags=["Legacy Compatibility"])
+def legacy_remediations(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
+    """Legacy remediations endpoint."""
+    findings = (
+        db.query(VulnerabilityFinding)
+        .filter(
+            VulnerabilityFinding.status.in_(["OPEN", "IN_PROGRESS", "ACKNOWLEDGED"])
+        )
+        .order_by(VulnerabilityFinding.severity.asc())
+        .limit(20)
+        .all()
+    )
+    return [
+        {
+            "id": f.id,
+            "title": f.title,
+            "asset": f.affected_host,
+            "severity": f.severity.lower(),
+            "status": f.status.lower(),
+            "verified_at": f.verified_at.isoformat() if f.verified_at else None,
+        }
+        for f in findings
+    ]
+
+
+@app.post("/remediations/{remediation_id}/verify", tags=["Legacy Compatibility"])
+def legacy_verify_remediation(
+    remediation_id: str, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Legacy remediation verification endpoint."""
+    f = (
+        db.query(VulnerabilityFinding)
+        .filter(VulnerabilityFinding.id == remediation_id)
+        .first()
+    )
+    if not f:
+        raise HTTPException(status_code=404, detail="Remediation not found")
+    f.status = "RESOLVED"
+    f.verified_at = datetime.now(timezone.utc)
+    db.commit()
+    return {
+        "id": f.id,
+        "title": f.title,
+        "asset": f.affected_host,
+        "severity": f.severity.lower(),
+        "status": "resolved",
+        "verified_at": f.verified_at.isoformat(),
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(
+        "main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG
+    )
